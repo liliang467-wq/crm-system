@@ -114,7 +114,7 @@ export default function CustomerRegister() {
   }
 
   return (
-    <div className="px-6 py-6 max-w-3xl">
+    <div className="px-6 py-6 max-w-[60rem]">
       {/* Page Header */}
       <div className="mb-6">
         <h1 className="text-xl font-bold text-foreground">客户登记</h1>
@@ -223,37 +223,6 @@ export default function CustomerRegister() {
             rows={2}
             className="text-sm resize-none"
           />
-        </div>
-
-        {/* ── Section 3: Customer Portrait ─────────────────────────────── */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <span className="w-1 h-4 bg-muted-foreground/30 rounded-full" />
-            <h3 className="text-sm font-semibold text-foreground">
-              客户画像 <span className="text-muted-foreground font-normal text-xs">(选填，选题形式)</span>
-            </h3>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {PORTRAIT_QUESTIONS.map(q => (
-              <div key={q.key} className="space-y-1.5">
-                <Label className="text-xs">{q.label}</Label>
-                <Select
-                  value={form.portrait[q.key] ?? "_none"}
-                  onValueChange={v => setPortraitField(q.key, v === "_none" ? "" : v)}
-                >
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="请选择" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">-- 暂不填写 --</SelectItem>
-                    {q.options.map(opt => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Submit */}

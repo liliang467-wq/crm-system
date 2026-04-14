@@ -101,27 +101,38 @@ export default function SysOrgs() {
     return users.find(u => u.id === id)?.name ?? "-";
   }
 
-  // Build tree-sorted org list with visual prefix (+/++/+++)
+  // Build tree-sorted org list using DFS so parent→child→grandchild are consecutive
   function buildTreeRows() {
-    // Determine level: no parent = level 1, has parent = level 2, has grandParent = level 3
-    function getLevel(o: typeof orgs[0]) {
-      if (o.grandParentId) return 3;
-      if (o.parentId) return 2;
-      return 1;
+    type OrgRow = typeof orgs[0] & { prefix: string; level: number };
+    const result: OrgRow[] = [];
+
+    // Roots = orgs with no parentId
+    const roots = orgs.filter(o => !o.parentId);
+    // Children by parentId
+    const childrenOf = (parentId: number) => orgs.filter(o => o.parentId === parentId && !o.grandParentId);
+    // Grandchildren by parentId (level-2 orgs whose parentId matches)
+    const grandChildrenOf = (parentId: number) => orgs.filter(o => o.parentId === parentId && !!o.grandParentId);
+
+    for (const root of roots) {
+      result.push({ ...root, prefix: "+", level: 1 });
+      const children = childrenOf(root.id);
+      for (const child of children) {
+        result.push({ ...child, prefix: "++", level: 2 });
+        const grandChildren = grandChildrenOf(child.id);
+        for (const gc of grandChildren) {
+          result.push({ ...gc, prefix: "+++", level: 3 });
+        }
+      }
     }
-    // Sort: top-level first, then by parentId, then grandParentId
-    const sorted = [...orgs].sort((a, b) => {
-      const la = getLevel(a), lb = getLevel(b);
-      if (la !== lb) return la - lb;
-      const pa = a.parentId ?? 0, pb = b.parentId ?? 0;
-      if (pa !== pb) return pa - pb;
-      return (a.grandParentId ?? 0) - (b.grandParentId ?? 0);
-    });
-    return sorted.map(o => ({
-      ...o,
-      prefix: getLevel(o) === 1 ? "+" : getLevel(o) === 2 ? "++" : "+++",
-      level: getLevel(o),
-    }));
+    // Also include any orphaned orgs that didn't fit the tree (data inconsistency guard)
+    const inResult = new Set(result.map(r => r.id));
+    for (const o of orgs) {
+      if (!inResult.has(o.id)) {
+        const level = o.grandParentId ? 3 : o.parentId ? 2 : 1;
+        result.push({ ...o, prefix: level === 1 ? "+" : level === 2 ? "++" : "+++", level });
+      }
+    }
+    return result;
   }
   const treeRows = buildTreeRows();
 

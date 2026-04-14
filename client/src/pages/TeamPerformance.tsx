@@ -122,7 +122,7 @@ export default function TeamPerformance() {
                   <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground text-sm">加载中...</TableCell></TableRow>
                 ) : items.length === 0 ? (
                   <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground text-sm">暂无数据</TableCell></TableRow>
-                ) : items.map((row, i) => (
+                ) : items.filter(row => row.total > 0).map((row, i) => (
                   <TableRow key={i}>
                     <TableCell className="text-sm font-medium">{row.date}</TableCell>
                     <TableCell className="text-sm">{row.orgName}</TableCell>
