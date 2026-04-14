@@ -1,0 +1,134 @@
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  formatCurrency,
+  formatPercent,
+  getTodayRange,
+} from "@/lib/crm-utils";
+import { trpc } from "@/lib/trpc";
+import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { useState } from "react";
+
+type StatCardProps = { label: string; value: string; sub?: string };
+function StatCard({ label, value, sub }: StatCardProps) {
+  return (
+    <Card className="border shadow-none">
+      <CardContent className="p-4">
+        <p className="text-xs text-muted-foreground mb-1">{label}</p>
+        <p className="text-2xl font-bold text-foreground">{value}</p>
+        {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function MyPerformance() {
+  const today = getTodayRange();
+  const [dateFrom, setDateFrom] = useState(today.dateFrom);
+  const [dateTo, setDateTo] = useState(today.dateTo);
+  const [page, setPage] = useState(1);
+
+  const statsQuery = trpc.performance.myStats.useQuery({ dateFrom, dateTo });
+  const listQuery = trpc.performance.myDailyList.useQuery({ dateFrom, dateTo, page, pageSize: 30 });
+
+  const stats = statsQuery.data;
+  const { items = [], total = 0 } = listQuery.data ?? {};
+  const totalPages = Math.max(1, Math.ceil(total / 30));
+
+  function handleReset() {
+    setDateFrom(today.dateFrom);
+    setDateTo(today.dateTo);
+    setPage(1);
+  }
+
+  return (
+    <div className="flex flex-col h-screen">
+      <div className="h-14 border-b bg-card flex items-center px-6 shrink-0">
+        <h1 className="text-lg font-semibold">我的业绩</h1>
+      </div>
+
+      <div className="flex-1 overflow-auto p-6 space-y-5">
+        {/* Filters */}
+        <div className="flex items-center gap-3">
+          <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }} className="h-8 text-sm w-36" />
+          <span className="text-muted-foreground text-sm">—</span>
+          <Input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }} className="h-8 text-sm w-36" />
+          <Button variant="ghost" size="sm" onClick={handleReset} className="h-8 text-muted-foreground">
+            <RotateCcw className="h-3.5 w-3.5 mr-1" />
+            重置
+          </Button>
+        </div>
+
+        {/* Stats Panel */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <StatCard label="客户总数" value={String(stats?.total ?? 0)} />
+          <StatCard label="开发成功数" value={String(stats?.successCount ?? 0)} />
+          <StatCard label="转化率" value={formatPercent(stats?.conversionRate)} />
+          <StatCard label="销售额" value={formatCurrency(stats?.totalSales)} />
+          <StatCard label="成功客均" value={formatCurrency(stats?.avgPerSuccess)} />
+          <StatCard label="全部客均" value={formatCurrency(stats?.avgPerAll)} />
+        </div>
+
+        {/* Daily List */}
+        <div className="bg-card rounded-lg border">
+          <div className="p-4 border-b">
+            <h2 className="text-sm font-semibold">业绩明细（按日汇总）</h2>
+          </div>
+          <div className="overflow-auto">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="text-xs">日期</TableHead>
+                  <TableHead className="text-xs">客户总数</TableHead>
+                  <TableHead className="text-xs">开发成功数</TableHead>
+                  <TableHead className="text-xs">转化率</TableHead>
+                  <TableHead className="text-xs">销售额</TableHead>
+                  <TableHead className="text-xs">成功客均</TableHead>
+                  <TableHead className="text-xs">全部客均</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {listQuery.isLoading ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">加载中...</TableCell></TableRow>
+                ) : items.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">暂无数据</TableCell></TableRow>
+                ) : items.map((row, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="text-sm font-medium">{row.date}</TableCell>
+                    <TableCell className="text-sm">{row.total}</TableCell>
+                    <TableCell className="text-sm">{row.successCount}</TableCell>
+                    <TableCell className="text-sm">{formatPercent(row.conversionRate)}</TableCell>
+                    <TableCell className="text-sm font-medium">{formatCurrency(row.totalSales)}</TableCell>
+                    <TableCell className="text-sm">{formatCurrency(row.avgPerSuccess)}</TableCell>
+                    <TableCell className="text-sm">{formatCurrency(row.avgPerAll)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="p-4 border-t flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">共 {total} 天数据</span>
+            <div className="flex items-center gap-1.5">
+              <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <span className="text-sm text-muted-foreground px-2">{page} / {totalPages}</span>
+              <Button variant="outline" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

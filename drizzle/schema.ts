@@ -1,22 +1,24 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+  decimal,
+  bigint,
+} from "drizzle-orm/mysql-core";
 
-/**
- * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
- */
+// ─── Users ────────────────────────────────────────────────────────────────────
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  /** employee = 员工, manager = 管理, sysadmin = 系统管理 */
+  role: mysqlEnum("role", ["employee", "manager", "sysadmin"]).default("employee").notNull(),
+  organizationId: int("organizationId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -25,4 +27,67 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+// ─── Organizations ────────────────────────────────────────────────────────────
+export const organizations = mysqlTable("organizations", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 128 }).notNull(),
+  /** The user id of the responsible person */
+  leaderId: int("leaderId"),
+  /** Direct parent org */
+  parentId: int("parentId"),
+  /** Grandparent org (level-2 parent) */
+  grandParentId: int("grandParentId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Organization = typeof organizations.$inferSelect;
+export type InsertOrganization = typeof organizations.$inferInsert;
+
+// ─── Source Channels ──────────────────────────────────────────────────────────
+export const sourceChannels = mysqlTable("source_channels", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 64 }).notNull().unique(),
+  createdById: int("createdById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SourceChannel = typeof sourceChannels.$inferSelect;
+export type InsertSourceChannel = typeof sourceChannels.$inferInsert;
+
+// ─── Customers ────────────────────────────────────────────────────────────────
+export const customers = mysqlTable("customers", {
+  id: int("id").autoincrement().primaryKey(),
+  /** 微信ID — unique per sales rep */
+  wxId: varchar("wxId", { length: 128 }).notNull(),
+  /** 客户姓名 */
+  customerName: varchar("customerName", { length: 64 }),
+  /** 来源渠道 — free text (mirrors channel name at time of entry) */
+  sourceChannel: varchar("sourceChannel", { length: 64 }),
+  /**
+   * 销售额 (元) — stored as decimal(12,2)
+   * NULL  → 待跟进
+   * 0     → 开发失败
+   * > 0   → 开发成功
+   */
+  salesAmount: decimal("salesAmount", { precision: 12, scale: 2 }),
+  /** 客户生日/时辰 */
+  customerBirthday: varchar("customerBirthday", { length: 64 }),
+  /** 对象姓名 */
+  contactName: varchar("contactName", { length: 64 }),
+  /** 对象生日/生辰 */
+  contactBirthday: varchar("contactBirthday", { length: 64 }),
+  /** 跟进备注 */
+  notes: text("notes"),
+  /** 录入员工 */
+  createdById: int("createdById").notNull(),
+  /** 所属团队 (snapshot at creation time) */
+  organizationId: int("organizationId"),
+  /** Server-enforced timestamp — client cannot set this */
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Customer = typeof customers.$inferSelect;
+export type InsertCustomer = typeof customers.$inferInsert;
