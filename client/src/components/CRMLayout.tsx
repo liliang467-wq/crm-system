@@ -140,7 +140,7 @@ function CRMSidebar({ user }: { user: NonNullable<ReturnType<typeof useAuth>["us
           </div>
           {!isCollapsed && (
             <span className="font-semibold text-sidebar-foreground text-sm truncate">
-              极简私域管理
+              私域销售CRM
             </span>
           )}
         </div>
@@ -156,11 +156,7 @@ function CRMSidebar({ user }: { user: NonNullable<ReturnType<typeof useAuth>["us
           return (
             <div key={gi}>
               {gi > 0 && <SidebarSeparator className="my-1 bg-sidebar-border" />}
-              {!isCollapsed && (
-                <div className="px-4 py-1.5 text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-widest">
-                  {group.title}
-                </div>
-              )}
+              {/* Nav group title removed per v1.3 requirement */}
               <SidebarMenu className="px-2">
                 {visibleItems.map(item => {
                   const isActive = location === item.path || location.startsWith(item.path + "/");

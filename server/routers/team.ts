@@ -120,9 +120,16 @@ export const teamRouter = router({
     .query(async ({ ctx, input }) => {
       requireManager(ctx.user.role);
       const user = ctx.user;
-      let orgIds: number[] = [];
-      if (user.organizationId) orgIds = await getVisibleOrgIds(user.organizationId);
-      if (input.orgId) orgIds = orgIds.filter(id => id === input.orgId);
+      // sysadmin with no org sees ALL data; manager sees their subtree
+      let orgIds: number[] | undefined = undefined;
+      if (user.organizationId) {
+        orgIds = await getVisibleOrgIds(user.organizationId);
+        // If filtering by a specific org, narrow down
+        if (input.orgId) orgIds = orgIds.filter(id => id === input.orgId);
+      } else if (input.orgId) {
+        // sysadmin filtering by specific org
+        orgIds = [input.orgId];
+      }
       return getTeamPerformanceStats({
         orgIds,
         dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
@@ -141,8 +148,11 @@ export const teamRouter = router({
     .query(async ({ ctx, input }) => {
       requireManager(ctx.user.role);
       const user = ctx.user;
-      let orgIds: number[] = [];
-      if (user.organizationId) orgIds = await getVisibleOrgIds(user.organizationId);
+      // sysadmin with no org sees ALL data; manager sees their subtree
+      let orgIds: number[] | undefined = undefined;
+      if (user.organizationId) {
+        orgIds = await getVisibleOrgIds(user.organizationId);
+      }
       return getTeamPerformanceDailyList({
         orgIds,
         orgId: input.orgId,

@@ -492,7 +492,9 @@ export async function getTeamPerformanceDailyList(filter: PerfFilter & { orgId?:
   const db = await getDb();
   if (!db) return { items: [], total: 0 };
   const conditions = [];
-  if (filter.orgIds && filter.orgIds.length > 0) {
+  // orgIds=undefined means sysadmin with no org → query all; orgIds=[] means no visible orgs → return empty
+  if (filter.orgIds !== undefined) {
+    if (filter.orgIds.length === 0) return { items: [], total: 0 };
     conditions.push(sql`${customers.organizationId} IN (${sql.join(filter.orgIds.map(id => sql`${id}`), sql`, `)})`);
   }
   if (filter.orgId) conditions.push(eq(customers.organizationId, filter.orgId));
@@ -558,7 +560,9 @@ export async function getTeamPerformanceStats(filter: PerfFilter) {
   const db = await getDb();
   if (!db) return null;
   const conditions = [];
-  if (filter.orgIds && filter.orgIds.length > 0) {
+  // orgIds=undefined means query all; orgIds=[] means no visible orgs
+  if (filter.orgIds !== undefined) {
+    if (filter.orgIds.length === 0) return null;
     conditions.push(sql`${customers.organizationId} IN (${sql.join(filter.orgIds.map(id => sql`${id}`), sql`, `)})`);
   }
   if (filter.dateFrom) conditions.push(gte(customers.createdAt, filter.dateFrom));

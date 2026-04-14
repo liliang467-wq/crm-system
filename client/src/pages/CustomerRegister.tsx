@@ -114,7 +114,7 @@ export default function CustomerRegister() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
+    <div className="px-6 py-6 max-w-3xl">
       {/* Page Header */}
       <div className="mb-6">
         <h1 className="text-xl font-bold text-foreground">客户登记</h1>
