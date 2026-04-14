@@ -80,17 +80,15 @@ export default function TeamPerformance() {
           </Button>
         </div>
 
-        {/* Stats Panel — compact horizontal bar (2 rows) */}
-        <div className="bg-card border rounded-lg">
-          <div className="flex flex-wrap divide-y md:divide-y-0">
+        {/* Stats Panel — compact single horizontal row */}
+        <div className="bg-card border rounded-lg overflow-x-auto">
+          <div className="flex min-w-max divide-x">
             <StatItem label="客户总数" value={String(stats?.total ?? 0)} />
-            <StatItem label="开发成功数" value={String(stats?.successCount ?? 0)} />
+            <StatItem label="开发成功" value={String(stats?.successCount ?? 0)} />
             <StatItem label="转化率" value={formatPercent(stats?.conversionRate)} />
             <StatItem label="销售额" value={formatCurrency(stats?.totalSales)} />
             <StatItem label="成功客均" value={formatCurrency(stats?.avgPerSuccess)} />
             <StatItem label="全部客均" value={formatCurrency(stats?.avgPerAll)} />
-          </div>
-          <div className="flex flex-wrap border-t divide-y md:divide-y-0">
             <StatItem label="员工总数" value={String(stats?.employeeCount ?? 0)} />
             <StatItem label="人均产出" value={formatCurrency(stats?.avgPerEmployee)} />
             <StatItem label="团队数量" value={String(stats?.orgCount ?? 0)} />

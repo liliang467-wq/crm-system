@@ -163,6 +163,7 @@ export default function TeamClients() {
                   <TableHead className="text-xs">渠道来源</TableHead>
                   <TableHead className="text-xs">状态</TableHead>
                   <TableHead className="text-xs">销售额</TableHead>
+                  <TableHead className="text-xs">员工姓名</TableHead>
                   <TableHead className="text-xs">录入时间</TableHead>
                   <TableHead className="text-xs">团队</TableHead>
                   <TableHead className="text-xs text-right">操作</TableHead>
@@ -170,9 +171,9 @@ export default function TeamClients() {
               </TableHeader>
               <TableBody>
                 {listQuery.isLoading ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground text-sm">加载中...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground text-sm">加载中...</TableCell></TableRow>
                 ) : items.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground text-sm">暂无数据</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground text-sm">暂无数据</TableCell></TableRow>
                 ) : items.map(client => {
                   const st = getCustomerStatus(client.salesAmount);
                   return (
@@ -186,8 +187,9 @@ export default function TeamClients() {
                       <TableCell className="text-sm font-medium">
                         {client.salesAmount !== null ? formatCurrency(parseFloat(String(client.salesAmount))) : "-"}
                       </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{(client as any).employeeName ?? "-"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{formatDate(client.createdAt)}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{client.organizationId ?? "-"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{(client as any).orgName ?? "-"}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button variant="ghost" size="sm" className="h-7 px-2 text-primary hover:text-primary" onClick={() => { setEditData(client); setFormOpen(true); }}>

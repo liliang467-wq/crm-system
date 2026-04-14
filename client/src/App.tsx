@@ -15,13 +15,14 @@ import SysUsers from "./pages/SysUsers";
 import SysOrgs from "./pages/SysOrgs";
 import SysChannels from "./pages/SysChannels";
 import ChannelAnalytics from "./pages/ChannelAnalytics";
+import CustomerRegister from "./pages/CustomerRegister";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 
 function RedirectToDefault() {
   const [, setLocation] = useLocation();
   useEffect(() => {
-    setLocation("/my-clients");
+    setLocation("/customer-register");
   }, [setLocation]);
   return null;
 }
@@ -31,6 +32,7 @@ function Router() {
     <CRMLayout>
       <Switch>
         <Route path="/" component={RedirectToDefault} />
+        <Route path="/customer-register" component={CustomerRegister} />
         <Route path="/my-clients" component={MyClients} />
         <Route path="/my-performance" component={MyPerformance} />
         <Route path="/my-ranking" component={MyRanking} />

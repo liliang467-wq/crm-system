@@ -101,6 +101,30 @@ export default function SysOrgs() {
     return users.find(u => u.id === id)?.name ?? "-";
   }
 
+  // Build tree-sorted org list with visual prefix (+/++/+++)
+  function buildTreeRows() {
+    // Determine level: no parent = level 1, has parent = level 2, has grandParent = level 3
+    function getLevel(o: typeof orgs[0]) {
+      if (o.grandParentId) return 3;
+      if (o.parentId) return 2;
+      return 1;
+    }
+    // Sort: top-level first, then by parentId, then grandParentId
+    const sorted = [...orgs].sort((a, b) => {
+      const la = getLevel(a), lb = getLevel(b);
+      if (la !== lb) return la - lb;
+      const pa = a.parentId ?? 0, pb = b.parentId ?? 0;
+      if (pa !== pb) return pa - pb;
+      return (a.grandParentId ?? 0) - (b.grandParentId ?? 0);
+    });
+    return sorted.map(o => ({
+      ...o,
+      prefix: getLevel(o) === 1 ? "+" : getLevel(o) === 2 ? "++" : "+++",
+      level: getLevel(o),
+    }));
+  }
+  const treeRows = buildTreeRows();
+
   return (
     <div className="flex flex-col h-screen">
       <div className="h-14 border-b bg-card flex items-center justify-between px-6 shrink-0">
@@ -127,9 +151,12 @@ export default function SysOrgs() {
                 <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground text-sm">加载中...</TableCell></TableRow>
               ) : orgs.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground text-sm">暂无组织，请新建</TableCell></TableRow>
-              ) : orgs.map(o => (
+              ) : treeRows.map(o => (
                 <TableRow key={o.id} className="group">
-                  <TableCell className="text-sm font-medium">{o.name}</TableCell>
+                  <TableCell className="text-sm font-medium">
+                    <span className="text-primary/60 font-mono mr-1.5 text-xs">{o.prefix}</span>
+                    <span style={{ paddingLeft: `${(o.level - 1) * 12}px` }}>{o.name}</span>
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{getUserName(o.leaderId)}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{getOrgName(o.parentId)}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{getOrgName(o.grandParentId)}</TableCell>

@@ -55,6 +55,7 @@ const navGroups: NavGroup[] = [
   {
     title: "员工工作台",
     items: [
+      { icon: UserSquare2, label: "客户登记", path: "/customer-register" },
       { icon: Users, label: "我的客户", path: "/my-clients" },
       { icon: BarChart2, label: "我的业绩", path: "/my-performance" },
       { icon: Award, label: "我的排行", path: "/my-ranking" },

@@ -83,10 +83,7 @@ export default function MyClients() {
       {/* Header */}
       <div className="h-14 border-b bg-card flex items-center justify-between px-6 shrink-0">
         <h1 className="text-lg font-semibold">我的客户</h1>
-        <Button size="sm" onClick={() => { setEditData(null); setFormOpen(true); }}>
-          <Plus className="h-4 w-4 mr-1" />
-          录入客户
-        </Button>
+
       </div>
 
       {/* Content */}

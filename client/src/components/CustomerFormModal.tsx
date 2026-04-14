@@ -64,16 +64,22 @@ export default function CustomerFormModal({ open, onClose, onSuccess, initialDat
   const [contactBirthday, setContactBirthday] = useState("");
   const [notes, setNotes] = useState("");
   const [portrait, setPortrait] = useState<Portrait>({});
+  const [caseNote, setCaseNote] = useState("");
 
   const channelsQuery = trpc.mgmt.listChannels.useQuery();
   const utils = trpc.useUtils();
 
   const createMutation = trpc.customers.create.useMutation({
     onSuccess: () => {
-      // Immediately invalidate so the list refreshes (#2 fix)
       utils.customers.list.invalidate();
       utils.performance.myStats.invalidate();
       utils.performance.myDailyList.invalidate();
+      utils.team.customers.invalidate();
+      utils.team.performanceStats.invalidate();
+      utils.team.performanceDailyList.invalidate();
+      utils.leaderboard.individual.invalidate();
+      utils.leaderboard.team.invalidate();
+      utils.channelAnalytics.list.invalidate();
     },
   });
   const updateMutation = trpc.customers.update.useMutation({
@@ -81,13 +87,25 @@ export default function CustomerFormModal({ open, onClose, onSuccess, initialDat
       utils.customers.list.invalidate();
       utils.performance.myStats.invalidate();
       utils.performance.myDailyList.invalidate();
+      utils.team.customers.invalidate();
+      utils.team.performanceStats.invalidate();
+      utils.team.performanceDailyList.invalidate();
+      utils.leaderboard.individual.invalidate();
+      utils.leaderboard.team.invalidate();
+      utils.channelAnalytics.list.invalidate();
     },
   });
   const teamUpdateMutation = trpc.team.updateCustomer.useMutation({
     onSuccess: () => {
+      utils.customers.list.invalidate();
+      utils.performance.myStats.invalidate();
+      utils.performance.myDailyList.invalidate();
       utils.team.customers.invalidate();
       utils.team.performanceStats.invalidate();
       utils.team.performanceDailyList.invalidate();
+      utils.leaderboard.individual.invalidate();
+      utils.leaderboard.team.invalidate();
+      utils.channelAnalytics.list.invalidate();
     },
   });
 
@@ -102,6 +120,7 @@ export default function CustomerFormModal({ open, onClose, onSuccess, initialDat
       setContactName(initialData?.contactName ?? "");
       setContactBirthday(initialData?.contactBirthday ?? "");
       setNotes(initialData?.notes ?? "");
+      setCaseNote((initialData as any)?.caseNote ?? "");
       try {
         setPortrait(initialData?.customerPortrait ? JSON.parse(initialData.customerPortrait) : {});
       } catch {
@@ -133,6 +152,7 @@ export default function CustomerFormModal({ open, onClose, onSuccess, initialDat
       contactBirthday: contactBirthday || null,
       notes: notes || null,
       customerPortrait: portraitJson,
+      caseNote: caseNote || null,
     };
     try {
       if (isEdit && initialData?.id) {
@@ -254,7 +274,19 @@ export default function CustomerFormModal({ open, onClose, onSuccess, initialDat
             </div>
           </div>
 
-          {/* ── Section 3: Customer Portrait ─────────────────────────────── */}
+          {/* ── Section 2.5: Case Note ─────────────────────────────────────────────── */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">备案登记框 <span className="text-muted-foreground font-normal">(选填)</span></Label>
+            <Textarea
+              value={caseNote}
+              onChange={e => setCaseNote(e.target.value)}
+              placeholder="备案信息、额外登记内容..."
+              rows={2}
+              className="text-sm resize-none"
+            />
+          </div>
+
+          {/* ── Section 3: Customer Portrait ────────────────────────────────────────────── */}
           <div>
             <div className="flex items-center gap-2 mb-4">
               <span className="w-1 h-4 bg-muted-foreground/30 rounded-full" />

@@ -84,6 +84,8 @@ export const customers = mysqlTable("customers", {
   notes: text("notes"),
   /** 客户画像 — 选填/选题形式的补充信息 JSON */
   customerPortrait: text("customerPortrait"),
+  /** 备案登记框 — 额外备注/备案信息 */
+  caseNote: text("caseNote"),
   /** 录入员工 */
   createdById: int("createdById").notNull(),
   /** 所属团队 (snapshot at creation time) */
