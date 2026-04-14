@@ -28,7 +28,6 @@ import {
   Briefcase,
   Building2,
   LogOut,
-  Settings,
   Tag,
   Users,
   UserSquare2,
@@ -77,17 +76,21 @@ const navGroups: NavGroup[] = [
 ];
 
 export default function CRMLayout({ children }: { children: React.ReactNode }) {
+  // ⚠️ ALL hooks MUST be called unconditionally before any early returns
   const { loading, user } = useAuth();
-
-  if (loading) return <DashboardLayoutSkeleton />;
-
   const [location, navigate] = useLocation();
-  // Route guard: redirect if user lacks required role
+
+  // Route guard: redirect if user lacks required role for the current path
   useEffect(() => {
     if (!user) return;
-    const blocked = ROUTE_ROLES.find(r => location.startsWith(r.prefix) && !r.roles.includes(user.role));
+    const blocked = ROUTE_ROLES.find(
+      r => location.startsWith(r.prefix) && !r.roles.includes(user.role)
+    );
     if (blocked) navigate("/my-clients");
   }, [location, user, navigate]);
+
+  // Early returns AFTER all hooks
+  if (loading) return <DashboardLayoutSkeleton />;
 
   if (!user) {
     return (

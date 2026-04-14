@@ -51,3 +51,7 @@
 - [x] All statistical formula implementations
 - [x] Vitest unit tests for core business logic (23 tests passing)
 - [x] Final UI polish and responsive checks
+
+## Bug Fixes
+
+- [x] Fix React #310 error: Hook called conditionally in CRMLayout (useLocation/useEffect called after early return)
