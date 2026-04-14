@@ -19,6 +19,7 @@ const customerInput = z.object({
   contactName: z.string().optional().nullable(),
   contactBirthday: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  customerPortrait: z.string().optional().nullable(),
 });
 
 export const customersRouter = router({
@@ -59,6 +60,7 @@ export const customersRouter = router({
         contactName: input.contactName ?? null,
         contactBirthday: input.contactBirthday ?? null,
         notes: input.notes ?? null,
+        customerPortrait: input.customerPortrait ?? null,
         createdById: user.id,
         organizationId: user.organizationId ?? null,
         // createdAt is server-enforced via DB default

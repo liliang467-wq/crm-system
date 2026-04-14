@@ -708,3 +708,83 @@ export async function getMyTeamRank(orgId: number, period: LeaderboardPeriod) {
     avgPerEmployee: employeeCount > 0 ? totalSales / employeeCount : 0,
   };
 }
+
+// ─── Internal Auth ────────────────────────────────────────────────────────────
+
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function setUserPassword(userId: number, passwordHash: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+}
+
+export async function createInternalUser(data: InsertUser & { passwordHash: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const result = await db.insert(users).values(data);
+  return result[0].insertId;
+}
+
+// ─── Channel Analytics ────────────────────────────────────────────────────────
+
+export interface ChannelAnalyticsFilter {
+  orgIds?: number[];
+  dateFrom?: Date;
+  dateTo?: Date;
+  channel?: string;
+}
+
+export async function getChannelAnalytics(filter: ChannelAnalyticsFilter) {
+  const db = await getDb();
+  if (!db) return { items: [], total: 0 };
+
+  const conditions = [];
+  if (filter.orgIds && filter.orgIds.length > 0) {
+    conditions.push(sql`${customers.organizationId} IN (${sql.join(filter.orgIds.map(id => sql`${id}`), sql`, `)})`);
+  }
+  if (filter.dateFrom) conditions.push(gte(customers.createdAt, filter.dateFrom));
+  if (filter.dateTo) {
+    const end = new Date(filter.dateTo);
+    end.setHours(23, 59, 59, 999);
+    conditions.push(lte(customers.createdAt, end));
+  }
+  if (filter.channel) conditions.push(eq(customers.sourceChannel, filter.channel));
+  // Only include rows that have a channel set
+  conditions.push(isNotNull(customers.sourceChannel));
+
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const items = await db.select({
+    channel: customers.sourceChannel,
+    total: sql<number>`count(*)`,
+    successCount: sql<number>`sum(case when ${customers.salesAmount} > 0 then 1 else 0 end)`,
+    totalSales: sql<number>`sum(case when ${customers.salesAmount} > 0 then ${customers.salesAmount} else 0 end)`,
+  }).from(customers)
+    .where(where)
+    .groupBy(customers.sourceChannel)
+    .orderBy(desc(sql`sum(case when ${customers.salesAmount} > 0 then ${customers.salesAmount} else 0 end)`));
+
+  return {
+    items: items.map(row => {
+      const total = Number(row.total);
+      const successCount = Number(row.successCount);
+      const totalSales = Number(row.totalSales);
+      return {
+        channel: row.channel ?? "未知渠道",
+        total,
+        successCount,
+        totalSales,
+        conversionRate: total > 0 ? (successCount / total) * 100 : 0,
+        avgPerSuccess: successCount > 0 ? totalSales / successCount : 0,
+        avgPerAll: total > 0 ? totalSales / total : 0,
+      };
+    }),
+    total: items.length,
+  };
+}

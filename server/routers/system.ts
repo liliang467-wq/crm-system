@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 import {
   createOrganization,
   createSourceChannel,
@@ -42,9 +43,11 @@ export const systemRouter = router({
       role: z.enum(["employee", "manager", "sysadmin"]),
       organizationId: z.number().optional().nullable(),
       openId: z.string().min(1),
+      password: z.string().min(1, "密码不能为空"),
     }))
     .mutation(async ({ ctx, input }) => {
       requireSysAdmin(ctx.user.role);
+      const passwordHash = await bcrypt.hash(input.password, 10);
       await upsertUser({
         openId: input.openId,
         name: input.name,
@@ -53,6 +56,7 @@ export const systemRouter = router({
         organizationId: input.organizationId ?? null,
         loginMethod: "internal",
         lastSignedIn: new Date(),
+        passwordHash,
       });
       return { success: true };
     }),
@@ -63,11 +67,16 @@ export const systemRouter = router({
       name: z.string().min(1).optional(),
       role: z.enum(["employee", "manager", "sysadmin"]).optional(),
       organizationId: z.number().optional().nullable(),
+      password: z.string().min(1).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       requireSysAdmin(ctx.user.role);
-      const { id, ...data } = input;
-      await updateUser(id, data);
+      const { id, password, ...data } = input;
+      const updateData: Record<string, unknown> = { ...data };
+      if (password) {
+        updateData.passwordHash = await bcrypt.hash(password, 10);
+      }
+      await updateUser(id, updateData);
       return { success: true };
     }),
 

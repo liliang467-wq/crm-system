@@ -22,6 +22,8 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  /** Bcrypt hash for internal account/password login. NULL = OAuth-only user */
+  passwordHash: varchar("passwordHash", { length: 256 }),
 });
 
 export type User = typeof users.$inferSelect;
@@ -80,6 +82,8 @@ export const customers = mysqlTable("customers", {
   contactBirthday: varchar("contactBirthday", { length: 64 }),
   /** 跟进备注 */
   notes: text("notes"),
+  /** 客户画像 — 选填/选题形式的补充信息 JSON */
+  customerPortrait: text("customerPortrait"),
   /** 录入员工 */
   createdById: int("createdById").notNull(),
   /** 所属团队 (snapshot at creation time) */

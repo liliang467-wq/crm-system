@@ -21,6 +21,16 @@ import { trpc } from "@/lib/trpc";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+// Portrait question options
+const PORTRAIT_QUESTIONS = [
+  { key: "relationship", label: "感情状态", options: ["单身", "恋爱中", "已婚", "离异", "其他"] },
+  { key: "ageRange", label: "年龄段", options: ["18-25岁", "26-30岁", "31-35岁", "36-40岁", "40岁以上"] },
+  { key: "budget", label: "预算范围", options: ["500元以下", "500-1000元", "1000-3000元", "3000元以上"] },
+  { key: "urgency", label: "需求紧迫度", options: ["非常迫切", "有意向", "观望中", "暂无需求"] },
+];
+
+type Portrait = Record<string, string>;
+
 type CustomerData = {
   id?: number;
   wxId?: string;
@@ -31,6 +41,7 @@ type CustomerData = {
   contactName?: string | null;
   contactBirthday?: string | null;
   notes?: string | null;
+  customerPortrait?: string | null;
 };
 
 type Props = {
@@ -52,11 +63,33 @@ export default function CustomerFormModal({ open, onClose, onSuccess, initialDat
   const [contactName, setContactName] = useState("");
   const [contactBirthday, setContactBirthday] = useState("");
   const [notes, setNotes] = useState("");
+  const [portrait, setPortrait] = useState<Portrait>({});
 
   const channelsQuery = trpc.mgmt.listChannels.useQuery();
-  const createMutation = trpc.customers.create.useMutation();
-  const updateMutation = trpc.customers.update.useMutation();
-  const teamUpdateMutation = trpc.team.updateCustomer.useMutation();
+  const utils = trpc.useUtils();
+
+  const createMutation = trpc.customers.create.useMutation({
+    onSuccess: () => {
+      // Immediately invalidate so the list refreshes (#2 fix)
+      utils.customers.list.invalidate();
+      utils.performance.myStats.invalidate();
+      utils.performance.myDailyList.invalidate();
+    },
+  });
+  const updateMutation = trpc.customers.update.useMutation({
+    onSuccess: () => {
+      utils.customers.list.invalidate();
+      utils.performance.myStats.invalidate();
+      utils.performance.myDailyList.invalidate();
+    },
+  });
+  const teamUpdateMutation = trpc.team.updateCustomer.useMutation({
+    onSuccess: () => {
+      utils.team.customers.invalidate();
+      utils.team.performanceStats.invalidate();
+      utils.team.performanceDailyList.invalidate();
+    },
+  });
 
   useEffect(() => {
     if (open) {
@@ -69,26 +102,37 @@ export default function CustomerFormModal({ open, onClose, onSuccess, initialDat
       setContactName(initialData?.contactName ?? "");
       setContactBirthday(initialData?.contactBirthday ?? "");
       setNotes(initialData?.notes ?? "");
+      try {
+        setPortrait(initialData?.customerPortrait ? JSON.parse(initialData.customerPortrait) : {});
+      } catch {
+        setPortrait({});
+      }
     }
   }, [open, initialData]);
 
   const salesAmount = salesAmountStr === "" ? null : parseFloat(salesAmountStr);
   const status = getCustomerStatus(salesAmount);
 
+  function setPortraitField(key: string, value: string) {
+    setPortrait(prev => ({ ...prev, [key]: value }));
+  }
+
   async function handleSubmit() {
     if (!wxId.trim()) {
       toast.error("微信ID不能为空");
       return;
     }
+    const portraitJson = Object.keys(portrait).length > 0 ? JSON.stringify(portrait) : null;
     const payload = {
       wxId: wxId.trim(),
       customerName: customerName || null,
-      sourceChannel: sourceChannel || null,
+      sourceChannel: sourceChannel === "_none" ? null : (sourceChannel || null),
       salesAmount: salesAmount,
       customerBirthday: customerBirthday || null,
       contactName: contactName || null,
       contactBirthday: contactBirthday || null,
       notes: notes || null,
+      customerPortrait: portraitJson,
     };
     try {
       if (isEdit && initialData?.id) {
@@ -118,13 +162,14 @@ export default function CustomerFormModal({ open, onClose, onSuccess, initialDat
           <DialogTitle>{isEdit ? "编辑客户信息" : "客户录入"}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 py-2">
-          {/* Section 1: Required */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
+        <div className="space-y-5 py-2">
+          {/* ── Section 1: Core Follow-up Info ─────────────────────────── */}
+          <div className="bg-blue-50/70 border border-blue-100 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-1">
               <span className="w-1 h-4 bg-primary rounded-full" />
               <h3 className="text-sm font-semibold text-foreground">核心跟进信息</h3>
             </div>
+            <p className="text-xs text-blue-500/80 mb-4 ml-3">（第一时间录入核心信息）</p>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">微信ID <span className="text-destructive">*</span></Label>
@@ -132,13 +177,13 @@ export default function CustomerFormModal({ open, onClose, onSuccess, initialDat
                   value={wxId}
                   onChange={e => setWxId(e.target.value)}
                   placeholder="客户唯一标识"
-                  className="h-9 text-sm"
+                  className="h-9 text-sm bg-white"
                 />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">来源渠道</Label>
                 <Select value={sourceChannel} onValueChange={setSourceChannel}>
-                  <SelectTrigger className="h-9 text-sm">
+                  <SelectTrigger className="h-9 text-sm bg-white">
                     <SelectValue placeholder="请选择来源渠道" />
                   </SelectTrigger>
                   <SelectContent>
@@ -156,7 +201,7 @@ export default function CustomerFormModal({ open, onClose, onSuccess, initialDat
                   value={salesAmountStr}
                   onChange={e => setSalesAmountStr(e.target.value)}
                   placeholder="空=待跟进，0=失败，>0=成功"
-                  className="h-9 text-sm"
+                  className="h-9 text-sm bg-white"
                   min={0}
                 />
               </div>
@@ -169,13 +214,25 @@ export default function CustomerFormModal({ open, onClose, onSuccess, initialDat
                 </div>
               </div>
             </div>
+            <div className="space-y-1.5 mt-4">
+              <Label className="text-xs">跟进备注</Label>
+              <Textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="记录客户的特殊需求或跟进情况..."
+                rows={2}
+                className="text-sm resize-none bg-white"
+              />
+            </div>
           </div>
 
-          {/* Section 2: Optional */}
+          {/* ── Section 2: Customer Profile ─────────────────────────────── */}
           <div>
             <div className="flex items-center gap-2 mb-4">
               <span className="w-1 h-4 bg-muted-foreground/30 rounded-full" />
-              <h3 className="text-sm font-semibold text-foreground">客户画像与补充 <span className="text-muted-foreground font-normal">(选填)</span></h3>
+              <h3 className="text-sm font-semibold text-foreground">
+                客户基本信息 <span className="text-muted-foreground font-normal text-xs">(选填，可后续补充)</span>
+              </h3>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -195,15 +252,36 @@ export default function CustomerFormModal({ open, onClose, onSuccess, initialDat
                 <Input value={contactBirthday} onChange={e => setContactBirthday(e.target.value)} placeholder="例如: 1992-08-15 卯时" className="h-9 text-sm" />
               </div>
             </div>
-            <div className="space-y-1.5 mt-4">
-              <Label className="text-xs">跟进备注</Label>
-              <Textarea
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                placeholder="记录客户的特殊需求或跟进情况..."
-                rows={3}
-                className="text-sm resize-none"
-              />
+          </div>
+
+          {/* ── Section 3: Customer Portrait ─────────────────────────────── */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="w-1 h-4 bg-muted-foreground/30 rounded-full" />
+              <h3 className="text-sm font-semibold text-foreground">
+                客户画像 <span className="text-muted-foreground font-normal text-xs">(选填，选题形式)</span>
+              </h3>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {PORTRAIT_QUESTIONS.map(q => (
+                <div key={q.key} className="space-y-1.5">
+                  <Label className="text-xs">{q.label}</Label>
+                  <Select
+                    value={portrait[q.key] ?? "_none"}
+                    onValueChange={v => setPortraitField(q.key, v === "_none" ? "" : v)}
+                  >
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="请选择" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">-- 暂不填写 --</SelectItem>
+                      {q.options.map(opt => (
+                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
             </div>
           </div>
         </div>

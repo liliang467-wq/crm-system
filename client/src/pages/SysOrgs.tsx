@@ -172,7 +172,15 @@ export default function SysOrgs() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">所属上一级</Label>
-              <Select value={editData.parentId} onValueChange={v => setEditData(d => ({ ...d, parentId: v }))}>
+              <Select
+                value={editData.parentId}
+                onValueChange={v => {
+                  // Auto-cascade: when parent changes, auto-fill grandParent from parent's parentId
+                  const parentOrg = orgs.find(o => String(o.id) === v);
+                  const autoGrandParent = parentOrg?.parentId ? String(parentOrg.parentId) : "_none";
+                  setEditData(d => ({ ...d, parentId: v, grandParentId: autoGrandParent }));
+                }}
+              >
                 <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="选择上级组织" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">-- 最高级（无上级）--</SelectItem>
@@ -181,12 +189,12 @@ export default function SysOrgs() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">所属上二级</Label>
+              <Label className="text-xs">所属上二级 <span className="text-muted-foreground font-normal">（选择上一级后自动带出）</span></Label>
               <Select value={editData.grandParentId} onValueChange={v => setEditData(d => ({ ...d, grandParentId: v }))}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="选择上上级组织" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">-- 无 --</SelectItem>
-                  {orgs.filter(o => o.id !== editData.id).map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
+                  {orgs.filter(o => o.id !== editData.id && o.id !== (editData.parentId === "_none" ? -1 : parseInt(editData.parentId))).map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

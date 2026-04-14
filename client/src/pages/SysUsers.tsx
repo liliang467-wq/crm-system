@@ -35,11 +35,12 @@ type UserForm = {
   openId: string;
   name: string;
   email: string;
+  password: string;
   role: "employee" | "manager" | "sysadmin";
   organizationId: string;
 };
 
-const defaultForm: UserForm = { openId: "", name: "", email: "", role: "employee", organizationId: "_none" };
+const defaultForm: UserForm = { openId: "", name: "", email: "", password: "", role: "employee", organizationId: "_none" };
 
 export default function SysUsers() {
   const [formOpen, setFormOpen] = useState(false);
@@ -74,6 +75,7 @@ export default function SysUsers() {
       openId: u.openId,
       name: u.name ?? "",
       email: u.email ?? "",
+      password: "",
       role: u.role,
       organizationId: u.organizationId ? String(u.organizationId) : "_none",
     });
@@ -84,10 +86,11 @@ export default function SysUsers() {
     if (!editData.name.trim()) { toast.error("员工姓名不能为空"); return; }
     const orgId = editData.organizationId === "_none" ? null : parseInt(editData.organizationId);
     if (editData.id) {
-      await updateMutation.mutateAsync({ id: editData.id, name: editData.name, role: editData.role, organizationId: orgId });
+      await updateMutation.mutateAsync({ id: editData.id, name: editData.name, role: editData.role, organizationId: orgId, password: editData.password || undefined });
     } else {
       if (!editData.openId.trim()) { toast.error("登录账户不能为空"); return; }
-      await createMutation.mutateAsync({ openId: editData.openId, name: editData.name, email: editData.email || null, role: editData.role, organizationId: orgId });
+      if (!editData.password.trim()) { toast.error("初始密码不能为空"); return; }
+      await createMutation.mutateAsync({ openId: editData.openId, name: editData.name, email: editData.email || null, password: editData.password, role: editData.role, organizationId: orgId });
     }
   }
 
@@ -163,8 +166,8 @@ export default function SysUsers() {
           <div className="space-y-4 py-2">
             {!editData.id && (
               <div className="space-y-1.5">
-                <Label className="text-xs">登录账户 (OpenID) <span className="text-destructive">*</span></Label>
-                <Input value={editData.openId} onChange={e => setEditData(d => ({ ...d, openId: e.target.value }))} placeholder="唯一标识符" className="h-9 text-sm" />
+                <Label className="text-xs">登录账户 <span className="text-destructive">*</span></Label>
+                <Input value={editData.openId} onChange={e => setEditData(d => ({ ...d, openId: e.target.value }))} placeholder="用于登录的账户名" className="h-9 text-sm" />
               </div>
             )}
             <div className="space-y-1.5">
@@ -177,6 +180,19 @@ export default function SysUsers() {
                 <Input type="email" value={editData.email} onChange={e => setEditData(d => ({ ...d, email: e.target.value }))} placeholder="可选" className="h-9 text-sm" />
               </div>
             )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">
+                {editData.id ? "重置密码（留空则不修改）" : "初始密码"}
+                {!editData.id && <span className="text-destructive"> *</span>}
+              </Label>
+              <Input
+                type="password"
+                value={editData.password}
+                onChange={e => setEditData(d => ({ ...d, password: e.target.value }))}
+                placeholder={editData.id ? "输入新密码（留空不修改）" : "设置初始登录密码"}
+                className="h-9 text-sm"
+              />
+            </div>
             <div className="space-y-1.5">
               <Label className="text-xs">角色</Label>
               <Select value={editData.role} onValueChange={v => setEditData(d => ({ ...d, role: v as any }))}>

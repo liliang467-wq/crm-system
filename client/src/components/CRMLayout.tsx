@@ -1,5 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +21,6 @@ import {
   SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { getLoginUrl } from "@/const";
 import { ROLE_LABELS } from "@/lib/crm-utils";
 import { trpc } from "@/lib/trpc";
 import {
@@ -27,13 +28,15 @@ import {
   BarChart2,
   Briefcase,
   Building2,
+  Loader2,
   LogOut,
   Tag,
   Users,
   UserSquare2,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 
@@ -63,6 +66,7 @@ const navGroups: NavGroup[] = [
       { icon: Briefcase, label: "团队客户", path: "/team-clients", roles: ["manager", "sysadmin"] },
       { icon: BarChart2, label: "团队业绩", path: "/team-performance", roles: ["manager", "sysadmin"] },
       { icon: Award, label: "团队排行", path: "/team-ranking", roles: ["manager", "sysadmin"] },
+      { icon: Tag, label: "渠道管理", path: "/team-channels", roles: ["manager", "sysadmin"] },
     ],
   },
   {
@@ -93,26 +97,7 @@ export default function CRMLayout({ children }: { children: React.ReactNode }) {
   if (loading) return <DashboardLayoutSkeleton />;
 
   if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="flex flex-col items-center gap-6 p-8 max-w-sm w-full">
-          <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-primary-foreground font-bold text-lg">
-            CRM
-          </div>
-          <div className="text-center">
-            <h1 className="text-2xl font-semibold tracking-tight">极简私域 CRM</h1>
-            <p className="text-sm text-muted-foreground mt-2">请登录以继续使用系统</p>
-          </div>
-          <Button
-            onClick={() => { window.location.href = getLoginUrl(); }}
-            size="lg"
-            className="w-full"
-          >
-            登录系统
-          </Button>
-        </div>
-      </div>
-    );
+    return <InternalLoginPage />;
   }
 
   return (
@@ -229,5 +214,93 @@ function CRMSidebar({ user }: { user: NonNullable<ReturnType<typeof useAuth>["us
         </DropdownMenu>
       </SidebarFooter>
     </Sidebar>
+  );
+}
+
+/** Internal account/password login page — replaces OAuth login */
+function InternalLoginPage() {
+  const [account, setAccount] = useState("");
+  const [password, setPassword] = useState("");
+  const utils = trpc.useUtils();
+
+  const loginMutation = trpc.auth.loginInternal.useMutation({
+    onSuccess: async () => {
+      // Invalidate auth state so useAuth re-fetches the current user
+      await utils.auth.me.invalidate();
+      window.location.reload();
+    },
+    onError: (err) => {
+      toast.error(err.message || "登录失败，请检查账户和密码");
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!account || !password) {
+      toast.error("请输入账户和密码");
+      return;
+    }
+    loginMutation.mutate({ account, password });
+  }
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <div className="w-full max-w-sm">
+        {/* Card */}
+        <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8">
+          {/* Logo */}
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-primary-foreground font-bold text-sm mb-4 shadow-md">
+              CRM
+            </div>
+            <h1 className="text-xl font-semibold text-slate-800">极简私域 CRM</h1>
+            <p className="text-sm text-slate-500 mt-1">内部系统 · 请使用账户登录</p>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="account" className="text-sm font-medium text-slate-700">登录账户</Label>
+              <Input
+                id="account"
+                type="text"
+                placeholder="请输入登录账户"
+                value={account}
+                onChange={e => setAccount(e.target.value)}
+                autoComplete="username"
+                className="h-10"
+                disabled={loginMutation.isPending}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-sm font-medium text-slate-700">密码</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="请输入密码"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                autoComplete="current-password"
+                className="h-10"
+                disabled={loginMutation.isPending}
+              />
+            </div>
+            <Button
+              type="submit"
+              className="w-full h-10 mt-2"
+              disabled={loginMutation.isPending}
+            >
+              {loginMutation.isPending ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />登录中...</>
+              ) : "登录"}
+            </Button>
+          </form>
+
+          <p className="text-center text-xs text-slate-400 mt-6">
+            如需账户，请联系系统管理员
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

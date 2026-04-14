@@ -15,6 +15,13 @@
       "when": 1776170501950,
       "tag": "0001_slim_vivisector",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1776175785255,
+      "tag": "0002_greedy_zaran",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -21,14 +20,12 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { useState } from "react";
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatItem({ label, value }: { label: string; value: string }) {
   return (
-    <Card className="border shadow-none">
-      <CardContent className="p-4">
-        <p className="text-xs text-muted-foreground mb-1">{label}</p>
-        <p className="text-xl font-bold">{value}</p>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-0.5 px-4 py-2.5 border-r last:border-r-0">
+      <span className="text-xs text-muted-foreground whitespace-nowrap">{label}</span>
+      <span className="text-base font-bold text-foreground tabular-nums">{value}</span>
+    </div>
   );
 }
 
@@ -83,18 +80,22 @@ export default function TeamPerformance() {
           </Button>
         </div>
 
-        {/* Stats Panel */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          <StatCard label="客户总数" value={String(stats?.total ?? 0)} />
-          <StatCard label="开发成功数" value={String(stats?.successCount ?? 0)} />
-          <StatCard label="转化率" value={formatPercent(stats?.conversionRate)} />
-          <StatCard label="销售额" value={formatCurrency(stats?.totalSales)} />
-          <StatCard label="成功客均" value={formatCurrency(stats?.avgPerSuccess)} />
-          <StatCard label="全部客均" value={formatCurrency(stats?.avgPerAll)} />
-          <StatCard label="员工总数" value={String(stats?.employeeCount ?? 0)} />
-          <StatCard label="人均产出" value={formatCurrency(stats?.avgPerEmployee)} />
-          <StatCard label="团队数量" value={String(stats?.orgCount ?? 0)} />
-          <StatCard label="团队均产" value={formatCurrency(stats?.avgPerOrg)} />
+        {/* Stats Panel — compact horizontal bar (2 rows) */}
+        <div className="bg-card border rounded-lg">
+          <div className="flex flex-wrap divide-y md:divide-y-0">
+            <StatItem label="客户总数" value={String(stats?.total ?? 0)} />
+            <StatItem label="开发成功数" value={String(stats?.successCount ?? 0)} />
+            <StatItem label="转化率" value={formatPercent(stats?.conversionRate)} />
+            <StatItem label="销售额" value={formatCurrency(stats?.totalSales)} />
+            <StatItem label="成功客均" value={formatCurrency(stats?.avgPerSuccess)} />
+            <StatItem label="全部客均" value={formatCurrency(stats?.avgPerAll)} />
+          </div>
+          <div className="flex flex-wrap border-t divide-y md:divide-y-0">
+            <StatItem label="员工总数" value={String(stats?.employeeCount ?? 0)} />
+            <StatItem label="人均产出" value={formatCurrency(stats?.avgPerEmployee)} />
+            <StatItem label="团队数量" value={String(stats?.orgCount ?? 0)} />
+            <StatItem label="团队均产" value={formatCurrency(stats?.avgPerOrg)} />
+          </div>
         </div>
 
         {/* Daily List */}
