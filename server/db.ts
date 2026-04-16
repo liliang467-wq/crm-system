@@ -13,6 +13,7 @@ import {
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { getPeriodRangeCST } from "./routers/_utils";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -258,11 +259,7 @@ function buildCustomerWhere(filter: CustomerFilter) {
   else if (filter.status === "fail") conditions.push(eq(customers.salesAmount, "0"));
   else if (filter.status === "pending") conditions.push(isNull(customers.salesAmount));
   if (filter.dateFrom) conditions.push(gte(customers.createdAt, filter.dateFrom));
-  if (filter.dateTo) {
-    const end = new Date(filter.dateTo);
-    end.setHours(23, 59, 59, 999);
-    conditions.push(lte(customers.createdAt, end));
-  }
+  if (filter.dateTo) conditions.push(lte(customers.createdAt, filter.dateTo));
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
 
@@ -325,11 +322,7 @@ export async function getPerformanceStats(filter: PerfFilter) {
     conditions.push(sql`${customers.organizationId} IN (${sql.join(filter.orgIds.map(id => sql`${id}`), sql`, `)})`);
   }
   if (filter.dateFrom) conditions.push(gte(customers.createdAt, filter.dateFrom));
-  if (filter.dateTo) {
-    const end = new Date(filter.dateTo);
-    end.setHours(23, 59, 59, 999);
-    conditions.push(lte(customers.createdAt, end));
-  }
+  if (filter.dateTo) conditions.push(lte(customers.createdAt, filter.dateTo));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
   const result = await db.select({
     total: sql<number>`count(*)`,
@@ -359,25 +352,21 @@ export async function getPerformanceDailyList(filter: PerfFilter & { page?: numb
     conditions.push(sql`${customers.organizationId} IN (${sql.join(filter.orgIds.map(id => sql`${id}`), sql`, `)})`);
   }
   if (filter.dateFrom) conditions.push(gte(customers.createdAt, filter.dateFrom));
-  if (filter.dateTo) {
-    const end = new Date(filter.dateTo);
-    end.setHours(23, 59, 59, 999);
-    conditions.push(lte(customers.createdAt, end));
-  }
+  if (filter.dateTo) conditions.push(lte(customers.createdAt, filter.dateTo));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
   const page = filter.page ?? 1;
   const pageSize = filter.pageSize ?? 30;
   const offset = (page - 1) * pageSize;
   const items = await db.select({
-    date: sql<string>`DATE(${customers.createdAt})`,
+    date: sql<string>`DATE(CONVERT_TZ(${customers.createdAt}, '+00:00', '+08:00'))`,
     total: sql<number>`count(*)`,
     successCount: sql<number>`sum(case when ${customers.salesAmount} > 0 then 1 else 0 end)`,
     totalSales: sql<number>`sum(case when ${customers.salesAmount} > 0 then ${customers.salesAmount} else 0 end)`,
   }).from(customers).where(where)
-    .groupBy(sql`DATE(${customers.createdAt})`)
-    .orderBy(desc(sql`DATE(${customers.createdAt})`))
+    .groupBy(sql`DATE(CONVERT_TZ(${customers.createdAt}, '+00:00', '+08:00'))`)
+    .orderBy(desc(sql`DATE(CONVERT_TZ(${customers.createdAt}, '+00:00', '+08:00'))`))
     .limit(pageSize).offset(offset);
-  const countResult = await db.select({ count: sql<number>`count(distinct DATE(${customers.createdAt}))` }).from(customers).where(where);
+  const countResult = await db.select({ count: sql<number>`count(distinct DATE(CONVERT_TZ(${customers.createdAt}, '+00:00', '+08:00')))` }).from(customers).where(where);
   return {
     items: items.map(row => {
       const total = Number(row.total);
@@ -402,21 +391,8 @@ export async function getPerformanceDailyList(filter: PerfFilter & { page?: numb
 export type LeaderboardPeriod = "day" | "week" | "month";
 
 function getPeriodRange(period: LeaderboardPeriod): { from: Date; to: Date } {
-  const now = new Date();
-  const to = new Date(now);
-  to.setHours(23, 59, 59, 999);
-  const from = new Date(now);
-  if (period === "day") {
-    from.setHours(0, 0, 0, 0);
-  } else if (period === "week") {
-    const day = from.getDay();
-    from.setDate(from.getDate() - (day === 0 ? 6 : day - 1));
-    from.setHours(0, 0, 0, 0);
-  } else {
-    from.setDate(1);
-    from.setHours(0, 0, 0, 0);
-  }
-  return { from, to };
+  // Use Beijing time (UTC+8) explicitly — server may run in a different timezone
+  return getPeriodRangeCST(period);
 }
 
 export async function getIndividualLeaderboard(period: LeaderboardPeriod, page = 1, pageSize = 30) {
@@ -544,30 +520,26 @@ export async function getTeamPerformanceDailyList(filter: PerfFilter & { orgId?:
   }
   if (filter.orgId) conditions.push(eq(customers.organizationId, filter.orgId));
   if (filter.dateFrom) conditions.push(gte(customers.createdAt, filter.dateFrom));
-  if (filter.dateTo) {
-    const end = new Date(filter.dateTo);
-    end.setHours(23, 59, 59, 999);
-    conditions.push(lte(customers.createdAt, end));
-  }
+  if (filter.dateTo) conditions.push(lte(customers.createdAt, filter.dateTo));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
   const page = filter.page ?? 1;
   const pageSize = filter.pageSize ?? 30;
   const offset = (page - 1) * pageSize;
   const items = await db.select({
-    date: sql<string>`DATE(${customers.createdAt})`,
+    date: sql<string>`DATE(CONVERT_TZ(${customers.createdAt}, '+00:00', '+08:00'))`,
     orgId: customers.organizationId,
     total: sql<number>`count(*)`,
     successCount: sql<number>`sum(case when ${customers.salesAmount} > 0 then 1 else 0 end)`,
     totalSales: sql<number>`sum(case when ${customers.salesAmount} > 0 then ${customers.salesAmount} else 0 end)`,
     employeeCount: sql<number>`count(distinct ${customers.createdById})`,
   }).from(customers).where(where)
-    .groupBy(sql`DATE(${customers.createdAt})`, customers.organizationId)
-    .orderBy(desc(sql`DATE(${customers.createdAt})`), asc(customers.organizationId))
+    .groupBy(sql`DATE(CONVERT_TZ(${customers.createdAt}, '+00:00', '+08:00'))`, customers.organizationId)
+    .orderBy(desc(sql`DATE(CONVERT_TZ(${customers.createdAt}, '+00:00', '+08:00'))`), asc(customers.organizationId))
     .limit(pageSize).offset(offset);
 
   const countResult = await db.select({ count: sql<number>`count(*)` }).from(
     db.select({ g: sql`1` }).from(customers).where(where)
-      .groupBy(sql`DATE(${customers.createdAt})`, customers.organizationId).as("sub")
+      .groupBy(sql`DATE(CONVERT_TZ(${customers.createdAt}, '+00:00', '+08:00'))`, customers.organizationId).as("sub")
   );
 
   const orgNames = new Map<number, string>();
@@ -617,11 +589,7 @@ export async function getTeamPerformanceStats(filter: PerfFilter) {
     conditions.push(sql`${customers.organizationId} IN (${sql.join(leafIds.map(id => sql`${id}`), sql`, `)})`);
   }
   if (filter.dateFrom) conditions.push(gte(customers.createdAt, filter.dateFrom));
-  if (filter.dateTo) {
-    const end = new Date(filter.dateTo);
-    end.setHours(23, 59, 59, 999);
-    conditions.push(lte(customers.createdAt, end));
-  }
+  if (filter.dateTo) conditions.push(lte(customers.createdAt, filter.dateTo));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
   const result = await db.select({
     total: sql<number>`count(*)`,
@@ -809,11 +777,7 @@ export async function getChannelAnalytics(filter: ChannelAnalyticsFilter) {
     conditions.push(sql`${customers.organizationId} IN (${sql.join(filter.orgIds.map(id => sql`${id}`), sql`, `)})`);
   }
   if (filter.dateFrom) conditions.push(gte(customers.createdAt, filter.dateFrom));
-  if (filter.dateTo) {
-    const end = new Date(filter.dateTo);
-    end.setHours(23, 59, 59, 999);
-    conditions.push(lte(customers.createdAt, end));
-  }
+  if (filter.dateTo) conditions.push(lte(customers.createdAt, filter.dateTo));
   if (filter.channel) conditions.push(eq(customers.sourceChannel, filter.channel));
   // Only include rows that have a channel set
   conditions.push(isNotNull(customers.sourceChannel));
@@ -865,11 +829,7 @@ export async function getEmployeeRanking(opts: {
 
   const conditions = [];
   if (dateFrom) conditions.push(gte(customers.createdAt, dateFrom));
-  if (dateTo) {
-    const end = new Date(dateTo);
-    end.setHours(23, 59, 59, 999);
-    conditions.push(lte(customers.createdAt, end));
-  }
+  if (dateTo) conditions.push(lte(customers.createdAt, dateTo));
   if (orgIds && orgIds.length > 0) {
     conditions.push(sql`${customers.organizationId} IN (${sql.join(orgIds.map(id => sql`${id}`), sql`, `)})`);
   }

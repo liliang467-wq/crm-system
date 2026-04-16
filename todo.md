@@ -163,6 +163,17 @@
 - [x] #7 统一所有团队名称格式：三级部门（二级部门小字），无三级部门显示未分配
 - [x] #8 所有页面团队筛选下拉也使用团队名称格式
 
+## v2.0 时区彻底修复
+
+- [x] 诊断：服务器时区为 America/New_York (UTC-4)，不是 UTC+8，导致所有日期计算错误
+- [x] 重写 server/routers/_utils.ts：parseDateLocal/parseDateLocalEnd 改用 +08:00 显式时区后缀
+- [x] 新增 getTodayRangeCST/getWeekStartCST/getMonthStartCST/getPeriodRangeCST 函数，全部基于 UTC+8
+- [x] db.ts 中 getPeriodRange() 改为调用 getPeriodRangeCST()，排行榜时间范围正确
+- [x] db.ts 中所有 dateTo setHours(23,59,59,999) 移除（改由路由层 parseDateLocalEnd 处理）
+- [x] db.ts 中所有 DATE(createdAt) 改为 DATE(CONVERT_TZ(createdAt, '+00:00', '+08:00'))，日期分组按北京时间
+- [x] channelAnalytics.ts 补充 parseDateLocal/parseDateLocalEnd
+- [x] 31 个测试全部通过，TypeScript 无报错
+
 ## v1.9 修复项
 
 - [x] 客户登记后数据不同步：修复后端日期解析时区问题（new Date('YYYY-MM-DD') → new Date('YYYY-MM-DDT00:00:00') 本地时间），补充 CustomerFormModal.tsx 和 CustomerRegister.tsx 中缺失的 leaderboard.mySelfRank、leaderboard.myTeamRank、leaderboard.employeeRanking invalidate，创建共享 parseDateLocal/parseDateLocalEnd helper（server/routers/_utils.ts）

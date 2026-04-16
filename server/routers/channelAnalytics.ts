@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { getChannelAnalytics, getVisibleOrgIds } from "../db";
 import { protectedProcedure, router } from "../_core/trpc";
+import { parseDateLocal, parseDateLocalEnd } from "./_utils";
 
 function requireManager(role: string) {
   if (role === "employee") {
@@ -28,8 +29,8 @@ export const channelAnalyticsRouter = router({
 
       return getChannelAnalytics({
         orgIds: orgIds.length > 0 ? orgIds : undefined,
-        dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
-        dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+        dateFrom: parseDateLocal(input.dateFrom),
+        dateTo: parseDateLocalEnd(input.dateTo),
         channel: input.channel,
       });
     }),
