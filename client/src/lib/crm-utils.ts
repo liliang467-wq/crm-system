@@ -4,13 +4,15 @@
  */
 
 /**
- * Value obfuscation: floor-truncate to significant digits and append "+"
- * Examples: 192 → "190+", 1926 → "1900+", 23037 → "23000+"
+ * Value obfuscation per PRD v1.5 rules:
+ * Truncate to the leading digit only (1 significant figure), append "+"
+ * Examples: 179 → 100+, 899.5 → 800+, 1234 → 1000+, 23037 → 20000+
  */
 export function obfuscateValue(value: number): string {
   if (value <= 0) return "0";
   if (value < 10) return `${Math.floor(value)}+`;
-  const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+  const d = Math.floor(Math.log10(value));
+  const magnitude = Math.pow(10, d);
   const truncated = Math.floor(value / magnitude) * magnitude;
   return `${truncated.toLocaleString()}+`;
 }

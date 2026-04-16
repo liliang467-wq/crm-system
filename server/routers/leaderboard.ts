@@ -5,6 +5,7 @@ import {
   getMyTeamRank,
   getTeamLeaderboard,
   getVisibleOrgIds,
+  getEmployeeRanking,
   LeaderboardPeriod,
 } from "../db";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -42,5 +43,30 @@ export const leaderboardRouter = router({
     .query(async ({ ctx, input }) => {
       if (!ctx.user.organizationId) return null;
       return getMyTeamRank(ctx.user.organizationId, input.period as LeaderboardPeriod);
+    }),
+
+  /** Employee ranking for team managers - with name search and custom date range */
+  employeeRanking: protectedProcedure
+    .input(z.object({
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+      nameSearch: z.string().optional(),
+      page: z.number().default(1),
+      pageSize: z.number().default(30),
+    }))
+    .query(async ({ ctx, input }) => {
+      const user = ctx.user;
+      let orgIds: number[] | undefined = undefined;
+      if (user.organizationId) {
+        orgIds = await getVisibleOrgIds(user.organizationId);
+      }
+      return getEmployeeRanking({
+        dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
+        dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+        nameSearch: input.nameSearch,
+        orgIds,
+        page: input.page,
+        pageSize: input.pageSize,
+      });
     }),
 });

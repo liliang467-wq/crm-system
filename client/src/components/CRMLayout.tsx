@@ -67,6 +67,7 @@ const navGroups: NavGroup[] = [
       { icon: Briefcase, label: "团队客户", path: "/team-clients", roles: ["manager", "sysadmin"] },
       { icon: BarChart2, label: "团队业绩", path: "/team-performance", roles: ["manager", "sysadmin"] },
       { icon: Award, label: "团队排行", path: "/team-ranking", roles: ["manager", "sysadmin"] },
+      { icon: Users, label: "员工排名", path: "/employee-ranking", roles: ["manager", "sysadmin"] },
       { icon: Tag, label: "渠道管理", path: "/team-channels", roles: ["manager", "sysadmin"] },
     ],
   },

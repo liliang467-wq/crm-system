@@ -1,3 +1,4 @@
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,28 +15,23 @@ import {
   getTodayRange,
 } from "@/lib/crm-utils";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Medal, RotateCcw } from "lucide-react";
 import { useState } from "react";
 
-type StatItemProps = { label: string; value: string };
-function StatItem({ label, value }: StatItemProps) {
-  return (
-    <div className="flex flex-col gap-0.5 px-4 py-2.5 border-r last:border-r-0">
-      <span className="text-xs text-muted-foreground whitespace-nowrap">{label}</span>
-      <span className="text-base font-bold text-foreground tabular-nums">{value}</span>
-    </div>
-  );
-}
-
 export default function MyPerformance() {
+  const { user } = useAuth();
   const today = getTodayRange();
   const [dateFrom, setDateFrom] = useState(today.dateFrom);
   const [dateTo, setDateTo] = useState(today.dateTo);
   const [page, setPage] = useState(1);
 
+  // Always fetch today's stats for the persistent top bar (independent of filter)
+  const todayStatsQuery = trpc.performance.myStats.useQuery({ dateFrom: today.dateFrom, dateTo: today.dateTo });
+  // Filtered stats for the panel
   const statsQuery = trpc.performance.myStats.useQuery({ dateFrom, dateTo });
   const listQuery = trpc.performance.myDailyList.useQuery({ dateFrom, dateTo, page, pageSize: 30 });
 
+  const todayStats = todayStatsQuery.data;
   const stats = statsQuery.data;
   const { items = [], total = 0 } = listQuery.data ?? {};
   const totalPages = Math.max(1, Math.ceil(total / 30));
@@ -48,9 +44,29 @@ export default function MyPerformance() {
 
   return (
     <div className="flex flex-col h-screen">
+      {/* Page header */}
       <div className="h-14 border-b bg-card flex items-center px-6 shrink-0">
         <h1 className="text-lg font-semibold">我的业绩</h1>
       </div>
+
+      {/* Personal stats persistent bar — always shows TODAY's real data */}
+      {user && todayStats !== undefined && (
+        <div className="bg-primary text-primary-foreground border-b border-primary/20 shadow-sm shrink-0">
+          <div className="px-6 py-2.5 flex items-center gap-5 text-sm overflow-x-auto">
+            <div className="flex items-center gap-2 font-semibold shrink-0">
+              <Medal className="h-4 w-4" />
+              <span>今日业绩</span>
+            </div>
+            <div className="h-4 w-px bg-primary-foreground/30 shrink-0" />
+            <span className="shrink-0">客户数: <strong>{todayStats?.total ?? 0}</strong></span>
+            <span className="shrink-0">成功: <strong>{todayStats?.successCount ?? 0}</strong></span>
+            <span className="shrink-0">转化率: <strong>{formatPercent(todayStats?.conversionRate)}</strong></span>
+            <span className="shrink-0">销售额: <strong>{formatCurrency(todayStats?.totalSales)}</strong></span>
+            <span className="shrink-0">成功客均: <strong>{formatCurrency(todayStats?.avgPerSuccess)}</strong></span>
+            <span className="shrink-0">全部客均: <strong>{formatCurrency(todayStats?.avgPerAll)}</strong></span>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-auto p-6 space-y-5">
         {/* Filters */}
@@ -64,14 +80,21 @@ export default function MyPerformance() {
           </Button>
         </div>
 
-        {/* Stats Panel — compact horizontal bar */}
-        <div className="bg-card border rounded-lg flex flex-wrap divide-y md:divide-y-0">
-          <StatItem label="客户总数" value={String(stats?.total ?? 0)} />
-          <StatItem label="开发成功数" value={String(stats?.successCount ?? 0)} />
-          <StatItem label="转化率" value={formatPercent(stats?.conversionRate)} />
-          <StatItem label="销售额" value={formatCurrency(stats?.totalSales)} />
-          <StatItem label="成功客均" value={formatCurrency(stats?.avgPerSuccess)} />
-          <StatItem label="全部客均" value={formatCurrency(stats?.avgPerAll)} />
+        {/* Stats Panel — compact horizontal bar for the selected range */}
+        <div className="bg-card border rounded-lg flex flex-wrap">
+          {[
+            { label: "客户总数", value: String(stats?.total ?? 0) },
+            { label: "开发成功数", value: String(stats?.successCount ?? 0) },
+            { label: "转化率", value: formatPercent(stats?.conversionRate) },
+            { label: "销售额", value: formatCurrency(stats?.totalSales) },
+            { label: "成功客均", value: formatCurrency(stats?.avgPerSuccess) },
+            { label: "全部客均", value: formatCurrency(stats?.avgPerAll) },
+          ].map((item, i) => (
+            <div key={i} className="flex flex-col gap-0.5 px-4 py-2.5 border-r last:border-r-0">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">{item.label}</span>
+              <span className="text-base font-bold text-foreground tabular-nums">{item.value}</span>
+            </div>
+          ))}
         </div>
 
         {/* Daily List */}
@@ -95,7 +118,7 @@ export default function MyPerformance() {
               <TableBody>
                 {listQuery.isLoading ? (
                   <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">加载中...</TableCell></TableRow>
-                ) : items.length === 0 ? (
+                ) : items.filter(row => row.total > 0).length === 0 ? (
                   <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">暂无数据</TableCell></TableRow>
                 ) : items.filter(row => row.total > 0).map((row, i) => (
                   <TableRow key={i}>

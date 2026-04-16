@@ -792,3 +792,81 @@ export async function getChannelAnalytics(filter: ChannelAnalyticsFilter) {
     total: items.length,
   };
 }
+
+// ─── Employee Ranking (Team Workspace) ───────────────────────────────────────
+export async function getEmployeeRanking(opts: {
+  dateFrom?: Date;
+  dateTo?: Date;
+  nameSearch?: string;
+  orgIds?: number[];
+  page?: number;
+  pageSize?: number;
+}) {
+  const db = await getDb();
+  if (!db) return { items: [], total: 0 };
+
+  const { dateFrom, dateTo, nameSearch, orgIds, page = 1, pageSize = 30 } = opts;
+
+  const conditions = [];
+  if (dateFrom) conditions.push(gte(customers.createdAt, dateFrom));
+  if (dateTo) {
+    const end = new Date(dateTo);
+    end.setHours(23, 59, 59, 999);
+    conditions.push(lte(customers.createdAt, end));
+  }
+  if (orgIds && orgIds.length > 0) {
+    conditions.push(sql`${customers.organizationId} IN (${sql.join(orgIds.map(id => sql`${id}`), sql`, `)})`);
+  }
+
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // Get all ranked by sales amount
+  const allRanked = await db.select({
+    userId: customers.createdById,
+    total: sql<number>`count(*)`,
+    successCount: sql<number>`sum(case when ${customers.salesAmount} > 0 then 1 else 0 end)`,
+    totalSales: sql<number>`sum(case when ${customers.salesAmount} > 0 then ${customers.salesAmount} else 0 end)`,
+  }).from(customers)
+    .where(where)
+    .groupBy(customers.createdById)
+    .orderBy(desc(sql`sum(case when ${customers.salesAmount} > 0 then ${customers.salesAmount} else 0 end)`));
+
+  // Fetch user info for all
+  const userIds = allRanked.map(r => r.userId);
+  const userList = userIds.length > 0
+    ? await db.select().from(users).where(sql`${users.id} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`)
+    : [];
+  const userMap = new Map(userList.map(u => [u.id, u]));
+
+  // Build ranked items with real rank
+  let ranked = allRanked.map((row, idx) => {
+    const u = userMap.get(row.userId);
+    const total = Number(row.total);
+    const successCount = Number(row.successCount);
+    const totalSales = Number(row.totalSales);
+    return {
+      rank: idx + 1,
+      userId: row.userId,
+      userName: u?.name ?? "未知",
+      organizationId: u?.organizationId ?? null,
+      total,
+      successCount,
+      totalSales,
+      conversionRate: total > 0 ? (successCount / total) * 100 : 0,
+      avgPerSuccess: successCount > 0 ? totalSales / successCount : 0,
+      avgPerAll: total > 0 ? totalSales / total : 0,
+    };
+  });
+
+  // Apply name search filter (after ranking so rank numbers are correct)
+  if (nameSearch && nameSearch.trim()) {
+    const keyword = nameSearch.trim().toLowerCase();
+    ranked = ranked.filter(r => r.userName.toLowerCase().includes(keyword));
+  }
+
+  const total = ranked.length;
+  const offset = (page - 1) * pageSize;
+  const items = ranked.slice(offset, offset + pageSize);
+
+  return { items, total };
+}

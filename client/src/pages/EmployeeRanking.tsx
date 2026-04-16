@@ -1,6 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -13,14 +13,12 @@ import {
   desensitizeName,
   formatCurrency,
   formatPercent,
+  getTodayRange,
   obfuscateValue,
 } from "@/lib/crm-utils";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, ChevronRight, Medal } from "lucide-react";
+import { ChevronLeft, ChevronRight, RotateCcw, Search } from "lucide-react";
 import { useState } from "react";
-
-type Period = "day" | "week" | "month";
-const PERIOD_LABELS: Record<Period, string> = { day: "日榜", week: "周榜", month: "月榜" };
 
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) return <span className="text-yellow-500 font-bold text-base">🥇</span>;
@@ -29,34 +27,79 @@ function RankBadge({ rank }: { rank: number }) {
   return <span className="text-muted-foreground text-sm font-medium">{rank}</span>;
 }
 
-export default function MyRanking() {
+export default function EmployeeRanking() {
   const { user } = useAuth();
-  const [period, setPeriod] = useState<Period>("day");
+  const today = getTodayRange();
+  const [dateFrom, setDateFrom] = useState(today.dateFrom);
+  const [dateTo, setDateTo] = useState(today.dateTo);
+  const [nameSearch, setNameSearch] = useState("");
+  const [nameInput, setNameInput] = useState("");
   const [page, setPage] = useState(1);
 
-  // Top 30 only per PRD v1.5
-  const rankQuery = trpc.leaderboard.individual.useQuery({ period, page: 1, pageSize: 30 });
-  // Always fetch own rank regardless of pagination
-  const selfRankQuery = trpc.leaderboard.mySelfRank.useQuery({ period });
+  const rankQuery = trpc.leaderboard.employeeRanking.useQuery({
+    dateFrom,
+    dateTo,
+    nameSearch: nameSearch || undefined,
+    page,
+    pageSize: 30,
+  });
 
   const { items = [], total = 0 } = rankQuery.data ?? {};
   const totalPages = Math.max(1, Math.ceil(total / 30));
-  const myEntry = selfRankQuery.data;
+
+  function handleReset() {
+    setDateFrom(today.dateFrom);
+    setDateTo(today.dateTo);
+    setNameSearch("");
+    setNameInput("");
+    setPage(1);
+  }
+
+  function handleSearch() {
+    setNameSearch(nameInput);
+    setPage(1);
+  }
 
   return (
     <div className="flex flex-col h-screen">
-      <div className="h-14 border-b bg-card flex items-center justify-between px-6 shrink-0">
-        <h1 className="text-lg font-semibold">我的排行</h1>
-        <Tabs value={period} onValueChange={v => { setPeriod(v as Period); setPage(1); }}>
-          <TabsList className="h-8">
-            {Object.entries(PERIOD_LABELS).map(([k, v]) => (
-              <TabsTrigger key={k} value={k} className="text-xs px-3">{v}</TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+      <div className="h-14 border-b bg-card flex items-center px-6 shrink-0">
+        <h1 className="text-lg font-semibold">员工排名</h1>
       </div>
 
-      <div className="flex-1 overflow-auto p-6 pb-20">
+      <div className="flex-1 overflow-auto p-6 space-y-5">
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Name search */}
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="搜索员工姓名..."
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSearch()}
+                className="h-8 text-sm pl-8 w-44"
+              />
+            </div>
+            <Button variant="outline" size="sm" onClick={handleSearch} className="h-8 text-sm">
+              搜索
+            </Button>
+          </div>
+
+          <div className="h-5 w-px bg-border" />
+
+          {/* Date range */}
+          <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }} className="h-8 text-sm w-36" />
+          <span className="text-muted-foreground text-sm">—</span>
+          <Input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }} className="h-8 text-sm w-36" />
+
+          <Button variant="ghost" size="sm" onClick={handleReset} className="h-8 text-muted-foreground">
+            <RotateCcw className="h-3.5 w-3.5 mr-1" />
+            重置
+          </Button>
+        </div>
+
+        {/* Ranking table */}
         <div className="bg-card rounded-lg border">
           <div className="overflow-auto">
             <Table>
@@ -106,30 +149,20 @@ export default function MyRanking() {
             </Table>
           </div>
 
-          <div className="p-4 border-t">
-            <span className="text-sm text-muted-foreground">显示前 {items.length} 名（共 {total} 人）</span>
+          <div className="p-4 border-t flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">共 {total} 人</span>
+            <div className="flex items-center gap-1.5">
+              <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <span className="text-sm text-muted-foreground px-2">{page} / {totalPages}</span>
+              <Button variant="outline" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Floating own row — always shows real data, independent of pagination */}
-      {user && myEntry && (
-        <div className="fixed bottom-0 left-[var(--sidebar-width,220px)] right-0 bg-primary text-primary-foreground border-t border-primary/20 shadow-lg z-20">
-          <div className="px-6 py-3 flex items-center gap-5 text-sm overflow-x-auto">
-            <div className="flex items-center gap-2 font-semibold shrink-0">
-              <Medal className="h-4 w-4" />
-              <span>我的排名: #{myEntry.rank}</span>
-            </div>
-            <div className="h-4 w-px bg-primary-foreground/30 shrink-0" />
-            <span className="shrink-0">客户数: {myEntry.total}</span>
-            <span className="shrink-0">成功: {myEntry.successCount}</span>
-            <span className="shrink-0">转化率: {formatPercent(myEntry.conversionRate)}</span>
-            <span className="shrink-0">销售额: {formatCurrency(myEntry.totalSales)}</span>
-            <span className="shrink-0">成功客均: {formatCurrency(myEntry.avgPerSuccess)}</span>
-            <span className="shrink-0">全部客均: {formatCurrency(myEntry.avgPerAll)}</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
