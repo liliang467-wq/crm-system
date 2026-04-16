@@ -12,33 +12,40 @@ import {
 import {
   formatCurrency,
   formatPercent,
+  getLast7DaysRange,
   getTodayRange,
 } from "@/lib/crm-utils";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronRight, Medal, RotateCcw } from "lucide-react";
 import { useState } from "react";
 
+const PAGE_SIZE = 7;
+
 export default function MyPerformance() {
   const { user } = useAuth();
   const today = getTodayRange();
-  const [dateFrom, setDateFrom] = useState(today.dateFrom);
-  const [dateTo, setDateTo] = useState(today.dateTo);
+  const last7 = getLast7DaysRange();
+
+  // Detail list defaults to last 7 days; stats panel follows same filter
+  const [dateFrom, setDateFrom] = useState(last7.dateFrom);
+  const [dateTo, setDateTo] = useState(last7.dateTo);
   const [page, setPage] = useState(1);
 
   // Always fetch today's stats for the persistent top bar (independent of filter)
   const todayStatsQuery = trpc.performance.myStats.useQuery({ dateFrom: today.dateFrom, dateTo: today.dateTo });
-  // Filtered stats for the panel
+  // Filtered stats for the panel (follows detail filter)
   const statsQuery = trpc.performance.myStats.useQuery({ dateFrom, dateTo });
-  const listQuery = trpc.performance.myDailyList.useQuery({ dateFrom, dateTo, page, pageSize: 30 });
+  // Daily list — pageSize=7, newest first (backend already orders DESC)
+  const listQuery = trpc.performance.myDailyList.useQuery({ dateFrom, dateTo, page, pageSize: PAGE_SIZE });
 
   const todayStats = todayStatsQuery.data;
   const stats = statsQuery.data;
   const { items = [], total = 0 } = listQuery.data ?? {};
-  const totalPages = Math.max(1, Math.ceil(total / 30));
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function handleReset() {
-    setDateFrom(today.dateFrom);
-    setDateTo(today.dateTo);
+    setDateFrom(last7.dateFrom);
+    setDateTo(last7.dateTo);
     setPage(1);
   }
 
@@ -97,10 +104,11 @@ export default function MyPerformance() {
           ))}
         </div>
 
-        {/* Daily List */}
+        {/* Daily List — 7 rows per page, newest date on top */}
         <div className="bg-card rounded-lg border">
-          <div className="p-4 border-b">
+          <div className="p-4 border-b flex items-center justify-between">
             <h2 className="text-sm font-semibold">业绩明细（按日汇总）</h2>
+            <span className="text-xs text-muted-foreground">每页 {PAGE_SIZE} 天，最新在前</span>
           </div>
           <div className="overflow-auto">
             <Table>
@@ -134,8 +142,11 @@ export default function MyPerformance() {
               </TableBody>
             </Table>
           </div>
+          {/* Pagination */}
           <div className="p-4 border-t flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">共 {total} 天数据</span>
+            <span className="text-sm text-muted-foreground">
+              共 {total} 天数据，第 {page} / {totalPages} 页
+            </span>
             <div className="flex items-center gap-1.5">
               <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
                 <ChevronLeft className="h-3.5 w-3.5" />

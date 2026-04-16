@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   Customer,
@@ -517,7 +517,7 @@ export async function getTeamPerformanceDailyList(filter: PerfFilter & { orgId?:
     employeeCount: sql<number>`count(distinct ${customers.createdById})`,
   }).from(customers).where(where)
     .groupBy(sql`DATE(${customers.createdAt})`, customers.organizationId)
-    .orderBy(desc(sql`DATE(${customers.createdAt})`))
+    .orderBy(desc(sql`DATE(${customers.createdAt})`), asc(customers.organizationId))
     .limit(pageSize).offset(offset);
 
   const countResult = await db.select({ count: sql<number>`count(*)` }).from(

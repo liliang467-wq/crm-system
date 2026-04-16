@@ -91,3 +91,13 @@ export function getTodayRange(): { dateFrom: string; dateTo: string } {
   const dateTo = today.toISOString().split("T")[0];
   return { dateFrom, dateTo };
 }
+
+/** Last 7 days range (today inclusive) as ISO strings */
+export function getLast7DaysRange(): { dateFrom: string; dateTo: string } {
+  const today = new Date();
+  const dateTo = today.toISOString().split("T")[0];
+  const from = new Date(today);
+  from.setDate(from.getDate() - 6); // 6 days back + today = 7 days
+  const dateFrom = from.toISOString().split("T")[0];
+  return { dateFrom, dateTo };
+}

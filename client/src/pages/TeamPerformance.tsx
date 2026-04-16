@@ -20,6 +20,8 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { useState } from "react";
 
+const PAGE_SIZE = 7;
+
 function StatItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-0.5 px-4 py-2.5 border-r last:border-r-0">
@@ -31,6 +33,7 @@ function StatItem({ label, value }: { label: string; value: string }) {
 
 export default function TeamPerformance() {
   const today = getTodayRange();
+  // Detail list defaults to today; stats panel follows same filter
   const [dateFrom, setDateFrom] = useState(today.dateFrom);
   const [dateTo, setDateTo] = useState(today.dateTo);
   const [orgId, setOrgId] = useState("_all");
@@ -41,15 +44,16 @@ export default function TeamPerformance() {
     dateFrom, dateTo,
     orgId: orgId === "_all" ? undefined : parseInt(orgId),
   });
+  // pageSize=7, backend orders by date DESC then org — each (date × team) is one row
   const listQuery = trpc.team.performanceDailyList.useQuery({
     dateFrom, dateTo,
     orgId: orgId === "_all" ? undefined : parseInt(orgId),
-    page, pageSize: 30,
+    page, pageSize: PAGE_SIZE,
   });
 
   const stats = statsQuery.data;
   const { items = [], total = 0 } = listQuery.data ?? {};
-  const totalPages = Math.max(1, Math.ceil(total / 30));
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function handleReset() {
     setDateFrom(today.dateFrom); setDateTo(today.dateTo);
@@ -96,10 +100,11 @@ export default function TeamPerformance() {
           </div>
         </div>
 
-        {/* Daily List */}
+        {/* Daily List — 7 rows per page, each row = one (date × team) combination */}
         <div className="bg-card rounded-lg border">
-          <div className="p-4 border-b">
+          <div className="p-4 border-b flex items-center justify-between">
             <h2 className="text-sm font-semibold">团队业绩明细（按日 × 团队汇总）</h2>
+            <span className="text-xs text-muted-foreground">同一天多团队分行展示，每页 {PAGE_SIZE} 条</span>
           </div>
           <div className="overflow-auto">
             <Table>
@@ -120,7 +125,7 @@ export default function TeamPerformance() {
               <TableBody>
                 {listQuery.isLoading ? (
                   <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground text-sm">加载中...</TableCell></TableRow>
-                ) : items.length === 0 ? (
+                ) : items.filter(row => row.total > 0).length === 0 ? (
                   <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground text-sm">暂无数据</TableCell></TableRow>
                 ) : items.filter(row => row.total > 0).map((row, i) => (
                   <TableRow key={i}>
@@ -139,8 +144,11 @@ export default function TeamPerformance() {
               </TableBody>
             </Table>
           </div>
+          {/* Pagination */}
           <div className="p-4 border-t flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">共 {total} 条记录</span>
+            <span className="text-sm text-muted-foreground">
+              共 {total} 条记录，第 {page} / {totalPages} 页
+            </span>
             <div className="flex items-center gap-1.5">
               <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
                 <ChevronLeft className="h-3.5 w-3.5" />
