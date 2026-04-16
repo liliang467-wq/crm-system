@@ -17,7 +17,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import TeamNameDisplay from "@/components/TeamNameDisplay";
 import { ChevronLeft, ChevronRight, Medal } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 type Period = "day" | "week" | "month";
 const PERIOD_LABELS: Record<Period, string> = { day: "日榜", week: "周榜", month: "月榜" };
@@ -29,19 +29,128 @@ function RankBadge({ rank }: { rank: number }) {
   return <span className="text-muted-foreground text-sm font-medium">{rank}</span>;
 }
 
+const PAGE_SIZE = 30;
+
+const ZERO_ENTRY = {
+  total: 0,
+  successCount: 0,
+  totalSales: 0,
+  conversionRate: 0,
+  avgPerSuccess: 0,
+  avgPerAll: 0,
+  employeeCount: 0,
+  avgPerEmployee: 0,
+};
+
 export default function TeamRanking() {
   const { user } = useAuth();
   const [period, setPeriod] = useState<Period>("day");
   const [page, setPage] = useState(1);
 
-  const rankQuery = trpc.leaderboard.team.useQuery({ period, page, pageSize: 30 });
+  // Fetch ranking data (only teams with data)
+  const rankQuery = trpc.leaderboard.team.useQuery({ period, page: 1, pageSize: 9999 });
   // Always fetch own team rank regardless of pagination
   const myTeamRankQuery = trpc.leaderboard.myTeamRank.useQuery({ period });
+  // Fetch all orgs with formatted names to identify leaf teams
+  const orgsFormattedQuery = trpc.mgmt.listOrganizationsFormatted.useQuery();
 
-  const { items = [], total = 0 } = rankQuery.data ?? {};
-  const totalPages = Math.max(1, Math.ceil(total / 30));
+  const { items: rankedItems = [] } = rankQuery.data ?? {};
   const myTeamEntry = myTeamRankQuery.data;
   const myOrgId = user?.organizationId;
+
+  // Identify leaf-level orgs (三级部门): orgs that are NOT a parent of any other org
+  const leafOrgs = useMemo(() => {
+    const allOrgs = orgsFormattedQuery.data ?? [];
+    const parentIds = new Set(allOrgs.map(o => o.parentId).filter(Boolean));
+    return allOrgs.filter(o => !parentIds.has(o.id));
+  }, [orgsFormattedQuery.data]);
+
+  // Merge ranked items with all leaf teams: fill zero-data teams, add "未分配" if needed
+  const allTeamRows = useMemo(() => {
+    // Build a map of orgId -> ranked data
+    const rankedMap = new Map<number | null, typeof rankedItems[0]>();
+    for (const item of rankedItems) {
+      if (item.orgId == null) {
+        rankedMap.set(null, item);
+      } else {
+        rankedMap.set(item.orgId, item);
+      }
+    }
+
+    type TeamRow = {
+      orgId: number | null;
+      orgName: string;
+      total: number;
+      successCount: number;
+      totalSales: number;
+      conversionRate: number;
+      avgPerSuccess: number;
+      avgPerAll: number;
+      employeeCount: number;
+      avgPerEmployee: number;
+    };
+
+    const rows: TeamRow[] = [];
+
+    // Add all leaf teams (with data or zero-filled)
+    for (const org of leafOrgs) {
+      const existing = rankedMap.get(org.id);
+      if (existing) {
+        rows.push({
+          orgId: org.id,
+          orgName: existing.orgName, // Use formatted name from backend (with parentheses)
+          total: existing.total,
+          successCount: existing.successCount,
+          totalSales: existing.totalSales,
+          conversionRate: existing.conversionRate,
+          avgPerSuccess: existing.avgPerSuccess,
+          avgPerAll: existing.avgPerAll,
+          employeeCount: existing.employeeCount,
+          avgPerEmployee: existing.avgPerEmployee,
+        });
+      } else {
+        rows.push({
+          orgId: org.id,
+          orgName: org.displayName, // Formatted name
+          ...ZERO_ENTRY,
+        });
+      }
+    }
+
+    // Add "未分配" row if there's unassigned data, or always show it
+    const unassignedData = rankedMap.get(null);
+    rows.push({
+      orgId: null,
+      orgName: "未分配",
+      ...(unassignedData ? {
+        total: unassignedData.total,
+        successCount: unassignedData.successCount,
+        totalSales: unassignedData.totalSales,
+        conversionRate: unassignedData.conversionRate,
+        avgPerSuccess: unassignedData.avgPerSuccess,
+        avgPerAll: unassignedData.avgPerAll,
+        employeeCount: unassignedData.employeeCount,
+        avgPerEmployee: unassignedData.avgPerEmployee,
+      } : ZERO_ENTRY),
+    });
+
+    // Sort by totalSales descending, then by orgName for stability
+    rows.sort((a, b) => {
+      if (b.totalSales !== a.totalSales) return b.totalSales - a.totalSales;
+      if (b.total !== a.total) return b.total - a.total;
+      return (a.orgName ?? "").localeCompare(b.orgName ?? "");
+    });
+
+    // Assign ranks
+    return rows.map((row, idx) => ({
+      ...row,
+      rank: idx + 1,
+    }));
+  }, [rankedItems, leafOrgs]);
+
+  const totalTeams = allTeamRows.length;
+  const totalPages = Math.max(1, Math.ceil(totalTeams / PAGE_SIZE));
+  const pageItems = allTeamRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="flex flex-col h-screen">
@@ -75,14 +184,14 @@ export default function TeamRanking() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rankQuery.isLoading ? (
+                {(rankQuery.isLoading || orgsFormattedQuery.isLoading) ? (
                   <TableRow><TableCell colSpan={10} className="text-center py-12 text-muted-foreground text-sm">加载中...</TableCell></TableRow>
-                ) : items.length === 0 ? (
+                ) : pageItems.length === 0 ? (
                   <TableRow><TableCell colSpan={10} className="text-center py-12 text-muted-foreground text-sm">暂无排行数据</TableCell></TableRow>
-                ) : items.map(item => {
+                ) : pageItems.map(item => {
                   const isMyOrg = myOrgId != null && item.orgId === myOrgId;
                   return (
-                    <TableRow key={item.orgId ?? item.rank} className={isMyOrg ? "bg-primary/5 font-medium" : ""}>
+                    <TableRow key={item.orgId ?? "unassigned"} className={`${isMyOrg ? "bg-primary/5 font-medium" : ""} ${item.total === 0 ? "text-muted-foreground" : ""}`}>
                       <TableCell><RankBadge rank={item.rank} /></TableCell>
                       <TableCell className="text-sm">
                         {isMyOrg ? (
@@ -97,17 +206,17 @@ export default function TeamRanking() {
                       <TableCell className="text-sm">{item.successCount}</TableCell>
                       <TableCell className="text-sm">{formatPercent(item.conversionRate)}</TableCell>
                       <TableCell className="text-sm font-medium">
-                        {isMyOrg ? formatCurrency(item.totalSales) : `¥${obfuscateValue(item.totalSales)}`}
+                        {isMyOrg ? formatCurrency(item.totalSales) : (item.totalSales > 0 ? `¥${obfuscateValue(item.totalSales)}` : formatCurrency(0))}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {isMyOrg ? formatCurrency(item.avgPerSuccess) : `¥${obfuscateValue(item.avgPerSuccess)}`}
+                        {isMyOrg ? formatCurrency(item.avgPerSuccess) : (item.avgPerSuccess > 0 ? `¥${obfuscateValue(item.avgPerSuccess)}` : formatCurrency(0))}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {isMyOrg ? formatCurrency(item.avgPerAll) : `¥${obfuscateValue(item.avgPerAll)}`}
+                        {isMyOrg ? formatCurrency(item.avgPerAll) : (item.avgPerAll > 0 ? `¥${obfuscateValue(item.avgPerAll)}` : formatCurrency(0))}
                       </TableCell>
                       <TableCell className="text-sm">{item.employeeCount}</TableCell>
                       <TableCell className="text-sm">
-                        {isMyOrg ? formatCurrency(item.avgPerEmployee) : `¥${obfuscateValue(item.avgPerEmployee)}`}
+                        {isMyOrg ? formatCurrency(item.avgPerEmployee) : (item.avgPerEmployee > 0 ? `¥${obfuscateValue(item.avgPerEmployee)}` : formatCurrency(0))}
                       </TableCell>
                     </TableRow>
                   );
@@ -117,7 +226,7 @@ export default function TeamRanking() {
           </div>
 
           <div className="p-4 border-t flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">共 {total} 个团队</span>
+            <span className="text-sm text-muted-foreground">共 {totalTeams} 个团队</span>
             <div className="flex items-center gap-1.5">
               <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
                 <ChevronLeft className="h-3.5 w-3.5" />

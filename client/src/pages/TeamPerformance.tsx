@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/table";
 import { formatCurrency, formatPercent, getTodayRange } from "@/lib/crm-utils";
 import { trpc } from "@/lib/trpc";
-import TeamNameDisplay from "@/components/TeamNameDisplay";
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -71,11 +70,11 @@ export default function TeamPerformance() {
   const stats = statsQuery.data;
   const { items: rawItems = [] } = listQuery.data ?? {};
 
-  // Build formatted name lookup: orgId -> displayName (e.g. "业务一组（事业一部）")
-  const orgDisplayNames = useMemo(() => {
+  // Build raw name lookup: orgId -> raw name (三级部门名 only, e.g. "业务一组")
+  const orgRawNames = useMemo(() => {
     const map = new Map<number, string>();
     for (const o of orgsFormattedQuery.data ?? []) {
-      map.set(o.id, o.displayName);
+      map.set(o.id, o.name); // Use raw name, not displayName with parentheses
     }
     return map;
   }, [orgsFormattedQuery.data]);
@@ -106,14 +105,14 @@ export default function TeamPerformance() {
     // If filtering by a specific org, only show that org per date
     if (orgId !== "_all") {
       const selectedOrgId = parseInt(orgId);
-      const displayName = orgDisplayNames.get(selectedOrgId) ?? "未分配";
+      const rawName = orgRawNames.get(selectedOrgId) ?? "未分配";
       return allDates.map(date => {
         const key = `${date}|${selectedOrgId}`;
         const existing = dataMap.get(key);
         return {
           date,
           orgId: selectedOrgId,
-          orgName: existing?.orgName ?? displayName,
+          orgName: rawName,
           ...(existing ? {
             total: existing.total,
             successCount: existing.successCount,
@@ -132,7 +131,7 @@ export default function TeamPerformance() {
     type TeamEntry = { orgId: number | null; displayName: string };
     const teams: TeamEntry[] = leafOrgs.map(o => ({
       orgId: o.id,
-      displayName: orgDisplayNames.get(o.id) ?? o.name,
+      displayName: o.name, // Use raw 三级部门名 only
     }));
     if (hasUnassigned) {
       teams.push({ orgId: null, displayName: "未分配" });
@@ -160,7 +159,7 @@ export default function TeamPerformance() {
           rows.push({
             date,
             orgId: team.orgId,
-            orgName: existing.orgName || team.displayName,
+            orgName: team.displayName, // Always use raw name
             total: existing.total,
             successCount: existing.successCount,
             totalSales: existing.totalSales,
@@ -182,7 +181,7 @@ export default function TeamPerformance() {
     }
 
     return rows;
-  }, [rawItems, dateFrom, dateTo, orgId, leafOrgs, orgDisplayNames]);
+  }, [rawItems, dateFrom, dateTo, orgId, leafOrgs, orgRawNames]);
 
   const totalRows = filledRows.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
@@ -265,7 +264,7 @@ export default function TeamPerformance() {
                 ) : pageItems.map((row, i) => (
                   <TableRow key={`${row.date}-${row.orgId}-${i}`} className={row.total === 0 ? "text-muted-foreground" : ""}>
                     <TableCell className="text-sm font-medium">{row.date}</TableCell>
-                    <TableCell className="text-sm"><TeamNameDisplay name={row.orgName} /></TableCell>
+                    <TableCell className="text-sm">{row.orgName}</TableCell>
                     <TableCell className="text-sm">{row.total}</TableCell>
                     <TableCell className="text-sm">{row.successCount}</TableCell>
                     <TableCell className="text-sm">{formatPercent(row.conversionRate)}</TableCell>

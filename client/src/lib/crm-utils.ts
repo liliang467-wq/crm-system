@@ -84,20 +84,27 @@ export const ROLE_LABELS: Record<string, string> = {
   sysadmin: "系统管理",
 };
 
-/** Today's date range as ISO strings */
-export function getTodayRange(): { dateFrom: string; dateTo: string } {
-  const today = new Date();
-  const dateFrom = today.toISOString().split("T")[0];
-  const dateTo = today.toISOString().split("T")[0];
-  return { dateFrom, dateTo };
+/** Format a Date to YYYY-MM-DD using local timezone */
+function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
-/** Last 7 days range (today inclusive) as ISO strings */
+/** Today's date range as ISO strings (local timezone) */
+export function getTodayRange(): { dateFrom: string; dateTo: string } {
+  const today = new Date();
+  const dateStr = toLocalDateStr(today);
+  return { dateFrom: dateStr, dateTo: dateStr };
+}
+
+/** Last 7 days range (today inclusive) as ISO strings (local timezone) */
 export function getLast7DaysRange(): { dateFrom: string; dateTo: string } {
   const today = new Date();
-  const dateTo = today.toISOString().split("T")[0];
+  const dateTo = toLocalDateStr(today);
   const from = new Date(today);
   from.setDate(from.getDate() - 6); // 6 days back + today = 7 days
-  const dateFrom = from.toISOString().split("T")[0];
+  const dateFrom = toLocalDateStr(from);
   return { dateFrom, dateTo };
 }
