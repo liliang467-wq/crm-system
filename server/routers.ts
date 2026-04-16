@@ -12,6 +12,7 @@ import { performanceRouter } from "./routers/performance";
 import { systemRouter } from "./routers/system";
 import { teamRouter } from "./routers/team";
 import { channelAnalyticsRouter } from "./routers/channelAnalytics";
+import { dataExportRouter } from "./routers/dataExport";
 import { getUserByOpenId } from "./db";
 
 export const appRouter = router({
@@ -48,6 +49,7 @@ export const appRouter = router({
   team: teamRouter,
   mgmt: systemRouter,
   channelAnalytics: channelAnalyticsRouter,
+  dataExport: dataExportRouter,
 });
 
 export type AppRouter = typeof appRouter;

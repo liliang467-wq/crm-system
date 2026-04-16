@@ -17,6 +17,7 @@ import SysChannels from "./pages/SysChannels";
 import ChannelAnalytics from "./pages/ChannelAnalytics";
 import CustomerRegister from "./pages/CustomerRegister";
 import EmployeeRanking from "./pages/EmployeeRanking";
+import DataExport from "./pages/DataExport";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 
@@ -45,6 +46,7 @@ function Router() {
         <Route path="/sys-channels" component={SysChannels} />
         <Route path="/team-channels" component={ChannelAnalytics} />
         <Route path="/employee-ranking" component={EmployeeRanking} />
+        <Route path="/data-export" component={DataExport} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>

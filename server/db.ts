@@ -19,7 +19,27 @@ let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      // Drizzle's mysql2 driver accepts PoolOptions via the `connection` field.
+      // When a string is passed it creates a pool with defaults (connectionLimit=10).
+      // We pass an object to tune pool parameters explicitly.
+      const url = new URL(process.env.DATABASE_URL);
+      _db = drizzle({
+        connection: {
+          host: url.hostname,
+          port: Number(url.port) || 4000,
+          user: decodeURIComponent(url.username),
+          password: decodeURIComponent(url.password),
+          database: url.pathname.replace("/", ""),
+          ssl: url.searchParams.get("ssl") ? { rejectUnauthorized: false } : undefined,
+          // mysql2 PoolOptions
+          connectionLimit: 10,
+          maxIdle: 5,
+          idleTimeout: 30_000,
+          waitForConnections: true,
+          queueLimit: 0,
+        },
+      });
+      console.log("[Database] Connection pool initialized (limit:10, maxIdle:5, idleTimeout:30s)");
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;

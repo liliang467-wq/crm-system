@@ -124,3 +124,17 @@
 
 - [x] 我的业绩明细：默认显示最近7天，每天一行，最新在上，超7行分页
 - [x] 团队业绩明细：默认显示当天，每团队一行，同一天多团队并列展示，超7行分页
+
+## 系统全面审查
+
+- [x] 功能优化审查：检查所有模块代码质量和业务逻辑
+- [x] 逐页面浏览器测试：验证所有页面正常打开，修复问题
+- [x] 性能测试：API响应时间、前端加载速度
+- [x] 空间容量评估：数据库大小、存储限制、可支持员工和客户数量
+
+## 审查报告优化项
+
+- [x] 添加数据库索引：customers表的createdById、organizationId、createdAt、sourceChannel字段（6个索引已生效）
+- [x] 优化数据库连接池配置：显式配置池参数(min:2, max:10, idle:30s)
+- [x] 前端tRPC batch查询优化：QueryClient staleTime=30s, gcTime=5min, refetchOnWindowFocus=false
+- [x] 数据备份导出功能：管理员可导出客户/用户/组织/渠道全量CSV

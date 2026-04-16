@@ -28,6 +28,7 @@ import {
   BarChart2,
   Briefcase,
   Building2,
+  Download,
   Loader2,
   LogOut,
   Tag,
@@ -44,6 +45,7 @@ import { Button } from "./ui/button";
 const ROUTE_ROLES: { prefix: string; roles: string[] }[] = [
   { prefix: "/team-", roles: ["manager", "sysadmin"] },
   { prefix: "/sys-", roles: ["sysadmin"] },
+  { prefix: "/data-export", roles: ["sysadmin"] },
 ];
 
 type NavGroup = {
@@ -77,6 +79,7 @@ const navGroups: NavGroup[] = [
       { icon: UserSquare2, label: "账户管理", path: "/sys-users", roles: ["sysadmin"] },
       { icon: Building2, label: "组织配置", path: "/sys-orgs", roles: ["sysadmin"] },
       { icon: Tag, label: "渠道配置", path: "/sys-channels", roles: ["sysadmin"] },
+      { icon: Download, label: "数据备份", path: "/data-export", roles: ["sysadmin"] },
     ],
   },
 ];

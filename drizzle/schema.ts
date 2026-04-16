@@ -7,6 +7,7 @@ import {
   varchar,
   decimal,
   bigint,
+  index,
 } from "drizzle-orm/mysql-core";
 
 // ─── Users ────────────────────────────────────────────────────────────────────
@@ -93,7 +94,14 @@ export const customers = mysqlTable("customers", {
   /** Server-enforced timestamp — client cannot set this */
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => ([
+  index("idx_customers_createdById").on(table.createdById),
+  index("idx_customers_organizationId").on(table.organizationId),
+  index("idx_customers_createdAt").on(table.createdAt),
+  index("idx_customers_sourceChannel").on(table.sourceChannel),
+  index("idx_customers_orgId_createdAt").on(table.organizationId, table.createdAt),
+  index("idx_customers_createdById_createdAt").on(table.createdById, table.createdAt),
+]));
 
 export type Customer = typeof customers.$inferSelect;
 export type InsertCustomer = typeof customers.$inferInsert;
