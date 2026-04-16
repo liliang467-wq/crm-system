@@ -29,6 +29,7 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronRight, Download, Edit2, RotateCcw, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import TeamNameDisplay from "@/components/TeamNameDisplay";
 
 export default function TeamClients() {
   const today = getTodayRange();
@@ -165,7 +166,7 @@ export default function TeamClients() {
                   <TableHead className="text-xs">销售额</TableHead>
                   <TableHead className="text-xs">员工姓名</TableHead>
                   <TableHead className="text-xs">录入时间</TableHead>
-                  <TableHead className="text-xs">团队</TableHead>
+                  <TableHead className="text-xs">团队名称</TableHead>
                   <TableHead className="text-xs text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
@@ -189,7 +190,9 @@ export default function TeamClients() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{(client as any).employeeName ?? "-"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{formatDate(client.createdAt)}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{(client as any).orgName ?? "-"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        <TeamNameDisplay name={(client as any).orgName || "未分配"} />
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button variant="ghost" size="sm" className="h-7 px-2 text-primary hover:text-primary" onClick={() => { setEditData(client); setFormOpen(true); }}>

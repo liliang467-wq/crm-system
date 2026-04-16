@@ -146,25 +146,40 @@ export async function deleteOrganization(id: number) {
   await db.delete(organizations).where(eq(organizations.id, id));
 }
 
-/** Build the full path label for an org, e.g. "开发部事业一部业务一组" */
+/**
+ * Build a display label for an org.
+ * For a level-3 org (leaf): "业务一组（事业一部）" — leaf name + parent in brackets
+ * For a level-2 org: "事业一部"
+ * For a level-1 org: "开发部"
+ */
 export async function buildOrgPath(orgId: number | null | undefined): Promise<string> {
-  if (!orgId) return "";
+  if (!orgId) return "未分配";
   const db = await getDb();
-  if (!db) return "";
+  if (!db) return "未分配";
   const org = await getOrganizationById(orgId);
-  if (!org) return "";
-  const parts: string[] = [org.name];
+  if (!org) return "未分配";
+
+  // Collect hierarchy: self, parent, grandparent
+  let parentOrg: Organization | undefined;
   if (org.parentId) {
-    const parent = await getOrganizationById(org.parentId);
-    if (parent) {
-      parts.unshift(parent.name);
-      if (parent.parentId) {
-        const grandParent = await getOrganizationById(parent.parentId);
-        if (grandParent) parts.unshift(grandParent.name);
-      }
-    }
+    parentOrg = await getOrganizationById(org.parentId);
   }
-  return parts.join("");
+
+  // Level-3 (has parent): show "leafName（parentName）"
+  if (parentOrg) {
+    return `${org.name}（${parentOrg.name}）`;
+  }
+  // Level-2 or Level-1: just the name
+  return org.name;
+}
+
+/** Get IDs of leaf-level orgs (orgs that are NOT a parent of any other org) */
+export async function getLeafOrgIds(): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const allOrgs = await db.select().from(organizations);
+  const parentIds = new Set(allOrgs.map(o => o.parentId).filter(Boolean) as number[]);
+  return allOrgs.filter(o => !parentIds.has(o.id)).map(o => o.id);
 }
 
 /** Get all org IDs that are visible to a given org (self + all descendants) */
@@ -455,9 +470,13 @@ export async function getTeamLeaderboard(period: LeaderboardPeriod, visibleOrgId
   const db = await getDb();
   if (!db) return { items: [], total: 0 };
   const { from, to } = getPeriodRange(period);
-  const orgCondition = visibleOrgIds.length > 0
-    ? sql`${customers.organizationId} IN (${sql.join(visibleOrgIds.map(id => sql`${id}`), sql`, `)})`
-    : sql`1=1`;
+  // Only include leaf-level orgs (三级团队) for team ranking
+  const leafIds = await getLeafOrgIds();
+  const effectiveOrgIds = visibleOrgIds.length > 0
+    ? visibleOrgIds.filter(id => leafIds.includes(id))
+    : leafIds;
+  if (effectiveOrgIds.length === 0) return { items: [], total: 0 };
+  const orgCondition = sql`${customers.organizationId} IN (${sql.join(effectiveOrgIds.map(id => sql`${id}`), sql`, `)})`;
 
   const items = await db.select({
     orgId: customers.organizationId,
@@ -512,10 +531,16 @@ export async function getTeamPerformanceDailyList(filter: PerfFilter & { orgId?:
   const db = await getDb();
   if (!db) return { items: [], total: 0 };
   const conditions = [];
-  // orgIds=undefined means sysadmin with no org → query all; orgIds=[] means no visible orgs → return empty
+  // Only include leaf-level orgs (三级团队) for team daily performance
+  const leafIds = await getLeafOrgIds();
+  // orgIds=undefined means sysadmin with no org → query all leaf orgs; orgIds=[] means no visible orgs → return empty
   if (filter.orgIds !== undefined) {
     if (filter.orgIds.length === 0) return { items: [], total: 0 };
-    conditions.push(sql`${customers.organizationId} IN (${sql.join(filter.orgIds.map(id => sql`${id}`), sql`, `)})`);
+    const filteredOrgIds = filter.orgIds.filter(id => leafIds.includes(id));
+    if (filteredOrgIds.length === 0) return { items: [], total: 0 };
+    conditions.push(sql`${customers.organizationId} IN (${sql.join(filteredOrgIds.map(id => sql`${id}`), sql`, `)})`);
+  } else if (leafIds.length > 0) {
+    conditions.push(sql`${customers.organizationId} IN (${sql.join(leafIds.map(id => sql`${id}`), sql`, `)})`);
   }
   if (filter.orgId) conditions.push(eq(customers.organizationId, filter.orgId));
   if (filter.dateFrom) conditions.push(gte(customers.createdAt, filter.dateFrom));
@@ -580,10 +605,16 @@ export async function getTeamPerformanceStats(filter: PerfFilter) {
   const db = await getDb();
   if (!db) return null;
   const conditions = [];
-  // orgIds=undefined means query all; orgIds=[] means no visible orgs
+  // Only include leaf-level orgs (三级团队) for team stats
+  const leafIds = await getLeafOrgIds();
+  // orgIds=undefined means query all leaf orgs; orgIds=[] means no visible orgs
   if (filter.orgIds !== undefined) {
     if (filter.orgIds.length === 0) return null;
-    conditions.push(sql`${customers.organizationId} IN (${sql.join(filter.orgIds.map(id => sql`${id}`), sql`, `)})`);
+    const filteredOrgIds = filter.orgIds.filter(id => leafIds.includes(id));
+    if (filteredOrgIds.length === 0) return null;
+    conditions.push(sql`${customers.organizationId} IN (${sql.join(filteredOrgIds.map(id => sql`${id}`), sql`, `)})`);
+  } else if (leafIds.length > 0) {
+    conditions.push(sql`${customers.organizationId} IN (${sql.join(leafIds.map(id => sql`${id}`), sql`, `)})`);
   }
   if (filter.dateFrom) conditions.push(gte(customers.createdAt, filter.dateFrom));
   if (filter.dateTo) {
@@ -677,11 +708,16 @@ export async function getMySelfRank(userId: number, period: LeaderboardPeriod) {
   };
 }
 
-/** Returns the current user's team leaderboard entry with their real rank */
+/** Returns the current user's team leaderboard entry with their real rank (among leaf-level orgs only) */
 export async function getMyTeamRank(orgId: number, period: LeaderboardPeriod) {
   const db = await getDb();
   if (!db) return null;
   const { from, to } = getPeriodRange(period);
+  // Only rank among leaf-level orgs (三级团队)
+  const leafIds = await getLeafOrgIds();
+  const leafCondition = leafIds.length > 0
+    ? sql`${customers.organizationId} IN (${sql.join(leafIds.map(id => sql`${id}`), sql`, `)})`
+    : sql`1=0`;
 
   const allRanked = await db.select({
     orgId: customers.organizationId,
@@ -690,7 +726,7 @@ export async function getMyTeamRank(orgId: number, period: LeaderboardPeriod) {
     successCount: sql<number>`sum(case when ${customers.salesAmount} > 0 then 1 else 0 end)`,
     employeeCount: sql<number>`count(distinct ${customers.createdById})`,
   }).from(customers)
-    .where(and(gte(customers.createdAt, from), lte(customers.createdAt, to)))
+    .where(and(gte(customers.createdAt, from), lte(customers.createdAt, to), leafCondition))
     .groupBy(customers.organizationId)
     .orderBy(desc(sql`sum(case when ${customers.salesAmount} > 0 then ${customers.salesAmount} else 0 end)`));
 

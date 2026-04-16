@@ -17,31 +17,56 @@ import {
 } from "@/lib/crm-utils";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronRight, Medal, RotateCcw } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const PAGE_SIZE = 7;
+
+/** Generate all dates between from and to (inclusive), descending order */
+function generateDateRange(from: string, to: string): string[] {
+  const dates: string[] = [];
+  const start = new Date(from + "T00:00:00");
+  const end = new Date(to + "T00:00:00");
+  const current = new Date(end);
+  while (current >= start) {
+    dates.push(current.toISOString().slice(0, 10));
+    current.setDate(current.getDate() - 1);
+  }
+  return dates;
+}
+
+const ZERO_ROW = { total: 0, successCount: 0, totalSales: 0, conversionRate: 0, avgPerSuccess: 0, avgPerAll: 0 };
 
 export default function MyPerformance() {
   const { user } = useAuth();
   const today = getTodayRange();
   const last7 = getLast7DaysRange();
 
-  // Detail list defaults to last 7 days; stats panel follows same filter
   const [dateFrom, setDateFrom] = useState(last7.dateFrom);
   const [dateTo, setDateTo] = useState(last7.dateTo);
   const [page, setPage] = useState(1);
 
-  // Always fetch today's stats for the persistent top bar (independent of filter)
   const todayStatsQuery = trpc.performance.myStats.useQuery({ dateFrom: today.dateFrom, dateTo: today.dateTo });
-  // Filtered stats for the panel (follows detail filter)
   const statsQuery = trpc.performance.myStats.useQuery({ dateFrom, dateTo });
-  // Daily list — pageSize=7, newest first (backend already orders DESC)
-  const listQuery = trpc.performance.myDailyList.useQuery({ dateFrom, dateTo, page, pageSize: PAGE_SIZE });
+  // Fetch ALL daily data for the range (large pageSize to get everything, then paginate client-side)
+  const listQuery = trpc.performance.myDailyList.useQuery({ dateFrom, dateTo, page: 1, pageSize: 9999 });
 
   const todayStats = todayStatsQuery.data;
   const stats = statsQuery.data;
-  const { items = [], total = 0 } = listQuery.data ?? {};
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const { items: rawItems = [] } = listQuery.data ?? {};
+
+  // Build a map of date -> data, then generate full date range with zero-fill
+  const filledRows = useMemo(() => {
+    const dataMap = new Map(rawItems.map(r => [r.date, r]));
+    const allDates = generateDateRange(dateFrom, dateTo);
+    return allDates.map(date => ({
+      date,
+      ...(dataMap.get(date) ?? ZERO_ROW),
+    }));
+  }, [rawItems, dateFrom, dateTo]);
+
+  const totalDays = filledRows.length;
+  const totalPages = Math.max(1, Math.ceil(totalDays / PAGE_SIZE));
+  const pageItems = filledRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function handleReset() {
     setDateFrom(last7.dateFrom);
@@ -51,12 +76,10 @@ export default function MyPerformance() {
 
   return (
     <div className="flex flex-col h-screen">
-      {/* Page header */}
       <div className="h-14 border-b bg-card flex items-center px-6 shrink-0">
         <h1 className="text-lg font-semibold">我的业绩</h1>
       </div>
 
-      {/* Personal stats persistent bar — always shows TODAY's real data */}
       {user && todayStats !== undefined && (
         <div className="bg-primary text-primary-foreground border-b border-primary/20 shadow-sm shrink-0">
           <div className="px-6 py-2.5 flex items-center gap-5 text-sm overflow-x-auto">
@@ -76,7 +99,7 @@ export default function MyPerformance() {
       )}
 
       <div className="flex-1 overflow-auto p-6 space-y-5">
-        {/* Filters */}
+        {/* Filters — date range always visible */}
         <div className="flex items-center gap-3">
           <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }} className="h-8 text-sm w-36" />
           <span className="text-muted-foreground text-sm">—</span>
@@ -87,7 +110,7 @@ export default function MyPerformance() {
           </Button>
         </div>
 
-        {/* Stats Panel — compact horizontal bar for the selected range */}
+        {/* Stats Panel */}
         <div className="bg-card border rounded-lg flex flex-wrap">
           {[
             { label: "客户总数", value: String(stats?.total ?? 0) },
@@ -104,11 +127,13 @@ export default function MyPerformance() {
           ))}
         </div>
 
-        {/* Daily List — 7 rows per page, newest date on top */}
+        {/* Daily List — zero-filled, 7 rows per page, newest date on top */}
         <div className="bg-card rounded-lg border">
           <div className="p-4 border-b flex items-center justify-between">
             <h2 className="text-sm font-semibold">业绩明细（按日汇总）</h2>
-            <span className="text-xs text-muted-foreground">每页 {PAGE_SIZE} 天，最新在前</span>
+            <span className="text-xs text-muted-foreground">
+              {dateFrom} 至 {dateTo}，共 {totalDays} 天
+            </span>
           </div>
           <div className="overflow-auto">
             <Table>
@@ -126,10 +151,8 @@ export default function MyPerformance() {
               <TableBody>
                 {listQuery.isLoading ? (
                   <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">加载中...</TableCell></TableRow>
-                ) : items.filter(row => row.total > 0).length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">暂无数据</TableCell></TableRow>
-                ) : items.filter(row => row.total > 0).map((row, i) => (
-                  <TableRow key={i}>
+                ) : pageItems.map((row) => (
+                  <TableRow key={row.date} className={row.total === 0 ? "text-muted-foreground" : ""}>
                     <TableCell className="text-sm font-medium">{row.date}</TableCell>
                     <TableCell className="text-sm">{row.total}</TableCell>
                     <TableCell className="text-sm">{row.successCount}</TableCell>
@@ -145,7 +168,7 @@ export default function MyPerformance() {
           {/* Pagination */}
           <div className="p-4 border-t flex items-center justify-between">
             <span className="text-sm text-muted-foreground">
-              共 {total} 天数据，第 {page} / {totalPages} 页
+              共 {totalDays} 天，第 {page} / {totalPages} 页
             </span>
             <div className="flex items-center gap-1.5">
               <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>

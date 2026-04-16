@@ -15,6 +15,7 @@ import {
   obfuscateValue,
 } from "@/lib/crm-utils";
 import { trpc } from "@/lib/trpc";
+import TeamNameDisplay from "@/components/TeamNameDisplay";
 import { ChevronLeft, ChevronRight, Medal } from "lucide-react";
 import { useState } from "react";
 
@@ -84,7 +85,13 @@ export default function TeamRanking() {
                     <TableRow key={item.orgId ?? item.rank} className={isMyOrg ? "bg-primary/5 font-medium" : ""}>
                       <TableCell><RankBadge rank={item.rank} /></TableCell>
                       <TableCell className="text-sm">
-                        {isMyOrg ? <span className="text-primary font-semibold">{item.orgName} (我的团队)</span> : item.orgName}
+                        {isMyOrg ? (
+                          <span className="text-primary font-semibold">
+                            <TeamNameDisplay name={item.orgName} highlight /> <span className="text-xs">(我的团队)</span>
+                          </span>
+                        ) : (
+                          <TeamNameDisplay name={item.orgName} />
+                        )}
                       </TableCell>
                       <TableCell className="text-sm">{item.total}</TableCell>
                       <TableCell className="text-sm">{item.successCount}</TableCell>
@@ -133,7 +140,7 @@ export default function TeamRanking() {
               <span>我的团队排名: #{myTeamEntry.rank}</span>
             </div>
             <div className="h-4 w-px bg-primary-foreground/30 shrink-0" />
-            <span className="shrink-0">{myTeamEntry.orgName}</span>
+            <span className="shrink-0"><TeamNameDisplay name={myTeamEntry.orgName} /></span>
             <span className="shrink-0">人数: {myTeamEntry.employeeCount}</span>
             <span className="shrink-0">客户数: {myTeamEntry.total}</span>
             <span className="shrink-0">成功: {myTeamEntry.successCount}</span>

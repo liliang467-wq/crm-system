@@ -17,8 +17,9 @@ import {
 } from "@/components/ui/table";
 import { formatCurrency, formatPercent, getTodayRange } from "@/lib/crm-utils";
 import { trpc } from "@/lib/trpc";
+import TeamNameDisplay from "@/components/TeamNameDisplay";
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const PAGE_SIZE = 7;
 
@@ -31,29 +32,161 @@ function StatItem({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Generate all dates between from and to (inclusive), descending order */
+function generateDateRange(from: string, to: string): string[] {
+  const dates: string[] = [];
+  const start = new Date(from + "T00:00:00");
+  const end = new Date(to + "T00:00:00");
+  const current = new Date(end);
+  while (current >= start) {
+    dates.push(current.toISOString().slice(0, 10));
+    current.setDate(current.getDate() - 1);
+  }
+  return dates;
+}
+
+const ZERO_ROW = { total: 0, successCount: 0, totalSales: 0, conversionRate: 0, avgPerSuccess: 0, avgPerAll: 0, employeeCount: 0, avgPerEmployee: 0 };
+
 export default function TeamPerformance() {
   const today = getTodayRange();
-  // Detail list defaults to today; stats panel follows same filter
   const [dateFrom, setDateFrom] = useState(today.dateFrom);
   const [dateTo, setDateTo] = useState(today.dateTo);
   const [orgId, setOrgId] = useState("_all");
   const [page, setPage] = useState(1);
 
+  // Use formatted org names for display
+  const orgsFormattedQuery = trpc.mgmt.listOrganizationsFormatted.useQuery();
   const orgsQuery = trpc.mgmt.listOrganizations.useQuery();
   const statsQuery = trpc.team.performanceStats.useQuery({
     dateFrom, dateTo,
     orgId: orgId === "_all" ? undefined : parseInt(orgId),
   });
-  // pageSize=7, backend orders by date DESC then org — each (date × team) is one row
+  // Fetch ALL daily data for the range (large pageSize), then zero-fill and paginate client-side
   const listQuery = trpc.team.performanceDailyList.useQuery({
     dateFrom, dateTo,
     orgId: orgId === "_all" ? undefined : parseInt(orgId),
-    page, pageSize: PAGE_SIZE,
+    page: 1, pageSize: 9999,
   });
 
   const stats = statsQuery.data;
-  const { items = [], total = 0 } = listQuery.data ?? {};
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const { items: rawItems = [] } = listQuery.data ?? {};
+
+  // Build formatted name lookup: orgId -> displayName (e.g. "业务一组（事业一部）")
+  const orgDisplayNames = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const o of orgsFormattedQuery.data ?? []) {
+      map.set(o.id, o.displayName);
+    }
+    return map;
+  }, [orgsFormattedQuery.data]);
+
+  // Determine which orgs are leaf-level (三级团队): orgs that have a parentId
+  const leafOrgs = useMemo(() => {
+    const allOrgs = orgsFormattedQuery.data ?? [];
+    // Leaf orgs = orgs that are NOT a parent of any other org
+    const parentIds = new Set(allOrgs.map(o => o.parentId).filter(Boolean));
+    return allOrgs.filter(o => !parentIds.has(o.id));
+  }, [orgsFormattedQuery.data]);
+
+  // Build zero-filled rows: for each date, show all leaf teams (including those with no data)
+  const filledRows = useMemo(() => {
+    const allDates = generateDateRange(dateFrom, dateTo);
+
+    // Build lookup: "date|orgId" -> row data
+    const dataMap = new Map<string, typeof rawItems[0]>();
+    for (const row of rawItems) {
+      const key = `${row.date}|${row.orgId ?? "null"}`;
+      dataMap.set(key, row);
+    }
+
+    // Check if there's unassigned data
+    const orgIdsInData = new Set(rawItems.map(r => r.orgId));
+    const hasUnassigned = orgIdsInData.has(null) || orgIdsInData.has(undefined as any);
+
+    // If filtering by a specific org, only show that org per date
+    if (orgId !== "_all") {
+      const selectedOrgId = parseInt(orgId);
+      const displayName = orgDisplayNames.get(selectedOrgId) ?? "未分配";
+      return allDates.map(date => {
+        const key = `${date}|${selectedOrgId}`;
+        const existing = dataMap.get(key);
+        return {
+          date,
+          orgId: selectedOrgId,
+          orgName: existing?.orgName ?? displayName,
+          ...(existing ? {
+            total: existing.total,
+            successCount: existing.successCount,
+            totalSales: existing.totalSales,
+            conversionRate: existing.conversionRate,
+            avgPerSuccess: existing.avgPerSuccess,
+            avgPerAll: existing.avgPerAll,
+            employeeCount: existing.employeeCount,
+            avgPerEmployee: existing.avgPerEmployee,
+          } : ZERO_ROW),
+        };
+      });
+    }
+
+    // "All teams" mode: for each date, show every leaf team + unassigned if present
+    type TeamEntry = { orgId: number | null; displayName: string };
+    const teams: TeamEntry[] = leafOrgs.map(o => ({
+      orgId: o.id,
+      displayName: orgDisplayNames.get(o.id) ?? o.name,
+    }));
+    if (hasUnassigned) {
+      teams.push({ orgId: null, displayName: "未分配" });
+    }
+
+    const rows: Array<{
+      date: string;
+      orgId: number | null;
+      orgName: string;
+      total: number;
+      successCount: number;
+      totalSales: number;
+      conversionRate: number;
+      avgPerSuccess: number;
+      avgPerAll: number;
+      employeeCount: number;
+      avgPerEmployee: number;
+    }> = [];
+
+    for (const date of allDates) {
+      for (const team of teams) {
+        const key = `${date}|${team.orgId ?? "null"}`;
+        const existing = dataMap.get(key);
+        if (existing) {
+          rows.push({
+            date,
+            orgId: team.orgId,
+            orgName: existing.orgName || team.displayName,
+            total: existing.total,
+            successCount: existing.successCount,
+            totalSales: existing.totalSales,
+            conversionRate: existing.conversionRate,
+            avgPerSuccess: existing.avgPerSuccess,
+            avgPerAll: existing.avgPerAll,
+            employeeCount: existing.employeeCount,
+            avgPerEmployee: existing.avgPerEmployee,
+          });
+        } else {
+          rows.push({
+            date,
+            orgId: team.orgId,
+            orgName: team.displayName,
+            ...ZERO_ROW,
+          });
+        }
+      }
+    }
+
+    return rows;
+  }, [rawItems, dateFrom, dateTo, orgId, leafOrgs, orgDisplayNames]);
+
+  const totalRows = filledRows.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const pageItems = filledRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function handleReset() {
     setDateFrom(today.dateFrom); setDateTo(today.dateTo);
@@ -84,7 +217,7 @@ export default function TeamPerformance() {
           </Button>
         </div>
 
-        {/* Stats Panel — compact single horizontal row */}
+        {/* Stats Panel */}
         <div className="bg-card border rounded-lg overflow-x-auto">
           <div className="flex min-w-max divide-x">
             <StatItem label="客户总数" value={String(stats?.total ?? 0)} />
@@ -100,11 +233,13 @@ export default function TeamPerformance() {
           </div>
         </div>
 
-        {/* Daily List — 7 rows per page, each row = one (date × team) combination */}
+        {/* Daily List — zero-filled, 7 rows per page */}
         <div className="bg-card rounded-lg border">
           <div className="p-4 border-b flex items-center justify-between">
             <h2 className="text-sm font-semibold">团队业绩明细（按日 × 团队汇总）</h2>
-            <span className="text-xs text-muted-foreground">同一天多团队分行展示，每页 {PAGE_SIZE} 条</span>
+            <span className="text-xs text-muted-foreground">
+              {dateFrom} 至 {dateTo}，同一天多团队分行展示
+            </span>
           </div>
           <div className="overflow-auto">
             <Table>
@@ -125,12 +260,12 @@ export default function TeamPerformance() {
               <TableBody>
                 {listQuery.isLoading ? (
                   <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground text-sm">加载中...</TableCell></TableRow>
-                ) : items.filter(row => row.total > 0).length === 0 ? (
+                ) : pageItems.length === 0 ? (
                   <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground text-sm">暂无数据</TableCell></TableRow>
-                ) : items.filter(row => row.total > 0).map((row, i) => (
-                  <TableRow key={i}>
+                ) : pageItems.map((row, i) => (
+                  <TableRow key={`${row.date}-${row.orgId}-${i}`} className={row.total === 0 ? "text-muted-foreground" : ""}>
                     <TableCell className="text-sm font-medium">{row.date}</TableCell>
-                    <TableCell className="text-sm">{row.orgName}</TableCell>
+                    <TableCell className="text-sm"><TeamNameDisplay name={row.orgName} /></TableCell>
                     <TableCell className="text-sm">{row.total}</TableCell>
                     <TableCell className="text-sm">{row.successCount}</TableCell>
                     <TableCell className="text-sm">{formatPercent(row.conversionRate)}</TableCell>
@@ -147,7 +282,7 @@ export default function TeamPerformance() {
           {/* Pagination */}
           <div className="p-4 border-t flex items-center justify-between">
             <span className="text-sm text-muted-foreground">
-              共 {total} 条记录，第 {page} / {totalPages} 页
+              共 {totalRows} 条记录，第 {page} / {totalPages} 页
             </span>
             <div className="flex items-center gap-1.5">
               <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>

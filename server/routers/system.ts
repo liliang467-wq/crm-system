@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import {
+  buildOrgPath,
   createOrganization,
   createSourceChannel,
   deleteOrganization,
@@ -93,6 +94,21 @@ export const systemRouter = router({
   listOrganizations: protectedProcedure.query(async ({ ctx }) => {
     requireManagerOrAbove(ctx.user.role);
     return getAllOrganizations();
+  }),
+
+  /** Returns all orgs with formatted display names via buildOrgPath */
+  listOrganizationsFormatted: protectedProcedure.query(async ({ ctx }) => {
+    requireManagerOrAbove(ctx.user.role);
+    const orgs = await getAllOrganizations();
+    const result = await Promise.all(
+      orgs.map(async (o) => ({
+        id: o.id,
+        name: o.name,
+        parentId: o.parentId,
+        displayName: await buildOrgPath(o.id),
+      }))
+    );
+    return result;
   }),
 
   createOrganization: protectedProcedure
