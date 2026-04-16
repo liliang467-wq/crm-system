@@ -9,6 +9,7 @@ import {
   updateCustomer,
 } from "../db";
 import { protectedProcedure, router } from "../_core/trpc";
+import { parseDateLocal, parseDateLocalEnd } from "./_utils";
 
 const customerInput = z.object({
   wxId: z.string().min(1, "微信ID不能为空"),
@@ -41,8 +42,8 @@ export const customersRouter = router({
         search: input.search,
         channel: input.channel,
         status: input.status,
-        dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
-        dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+        dateFrom: parseDateLocal(input.dateFrom),
+        dateTo: parseDateLocalEnd(input.dateTo),
         page: input.page,
         pageSize: input.pageSize,
       });

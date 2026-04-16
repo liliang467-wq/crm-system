@@ -9,6 +9,7 @@ import {
   LeaderboardPeriod,
 } from "../db";
 import { protectedProcedure, router } from "../_core/trpc";
+import { parseDateLocal, parseDateLocalEnd } from "./_utils";
 
 const periodSchema = z.enum(["day", "week", "month"]);
 
@@ -64,8 +65,8 @@ export const leaderboardRouter = router({
       // If a specific org filter is provided, use only that org
       const finalOrgIds = input.filterOrgId ? [input.filterOrgId] : orgIds;
       return getEmployeeRanking({
-        dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
-        dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+        dateFrom: parseDateLocal(input.dateFrom),
+        dateTo: parseDateLocalEnd(input.dateTo),
         nameSearch: input.nameSearch,
         orgIds: finalOrgIds,
         page: input.page,

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getPerformanceDailyList, getPerformanceStats } from "../db";
 import { protectedProcedure, router } from "../_core/trpc";
+import { parseDateLocal, parseDateLocalEnd } from "./_utils";
 
 const dateRangeInput = z.object({
   dateFrom: z.string().optional(),
@@ -15,8 +16,8 @@ export const performanceRouter = router({
     .query(async ({ ctx, input }) => {
       return getPerformanceStats({
         createdById: ctx.user.id,
-        dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
-        dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+        dateFrom: parseDateLocal(input.dateFrom),
+        dateTo: parseDateLocalEnd(input.dateTo),
       });
     }),
 
@@ -25,8 +26,8 @@ export const performanceRouter = router({
     .query(async ({ ctx, input }) => {
       return getPerformanceDailyList({
         createdById: ctx.user.id,
-        dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
-        dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+        dateFrom: parseDateLocal(input.dateFrom),
+        dateTo: parseDateLocalEnd(input.dateTo),
         page: input.page,
         pageSize: input.pageSize,
       });

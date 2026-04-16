@@ -162,3 +162,7 @@
 - [x] #6 我的排行页面：我的排名模块移到页面顶部标题下
 - [x] #7 统一所有团队名称格式：三级部门（二级部门小字），无三级部门显示未分配
 - [x] #8 所有页面团队筛选下拉也使用团队名称格式
+
+## v1.9 修复项
+
+- [x] 客户登记后数据不同步：修复后端日期解析时区问题（new Date('YYYY-MM-DD') → new Date('YYYY-MM-DDT00:00:00') 本地时间），补充 CustomerFormModal.tsx 和 CustomerRegister.tsx 中缺失的 leaderboard.mySelfRank、leaderboard.myTeamRank、leaderboard.employeeRanking invalidate，创建共享 parseDateLocal/parseDateLocalEnd helper（server/routers/_utils.ts）

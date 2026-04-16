@@ -13,6 +13,7 @@ import {
   updateCustomer,
 } from "../db";
 import { protectedProcedure, router } from "../_core/trpc";
+import { parseDateLocal, parseDateLocalEnd } from "./_utils";
 
 function requireManager(role: string) {
   if (role === "employee") {
@@ -57,8 +58,8 @@ export const teamRouter = router({
         search: input.search,
         channel: input.channel,
         status: input.status,
-        dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
-        dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+        dateFrom: parseDateLocal(input.dateFrom),
+        dateTo: parseDateLocalEnd(input.dateTo),
         page: input.page,
         pageSize: input.pageSize,
       });
@@ -132,8 +133,8 @@ export const teamRouter = router({
       }
       return getTeamPerformanceStats({
         orgIds,
-        dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
-        dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+        dateFrom: parseDateLocal(input.dateFrom),
+        dateTo: parseDateLocalEnd(input.dateTo),
       });
     }),
 
@@ -156,8 +157,8 @@ export const teamRouter = router({
       return getTeamPerformanceDailyList({
         orgIds,
         orgId: input.orgId,
-        dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
-        dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+        dateFrom: parseDateLocal(input.dateFrom),
+        dateTo: parseDateLocalEnd(input.dateTo),
         page: input.page,
         pageSize: input.pageSize,
       });

@@ -54,6 +54,9 @@ export default function CustomerRegister() {
       utils.team.performanceDailyList.invalidate();
       utils.leaderboard.individual.invalidate();
       utils.leaderboard.team.invalidate();
+      utils.leaderboard.mySelfRank.invalidate();
+      utils.leaderboard.myTeamRank.invalidate();
+      utils.leaderboard.employeeRanking.invalidate();
       utils.channelAnalytics.list.invalidate();
     },
   });
