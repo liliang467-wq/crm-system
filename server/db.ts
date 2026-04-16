@@ -894,17 +894,26 @@ export async function getEmployeeRanking(opts: {
     : [];
   const userMap = new Map(userList.map(u => [u.id, u]));
 
+  // Build org name map for all users' organizations
+  const orgIdsForNames = Array.from(new Set(userList.map(u => u.organizationId).filter(Boolean) as number[]));
+  const orgNameMap = new Map<number, string>();
+  for (const oid of orgIdsForNames) {
+    orgNameMap.set(oid, await buildOrgPath(oid));
+  }
+
   // Build ranked items with real rank
   let ranked = allRanked.map((row, idx) => {
     const u = userMap.get(row.userId);
     const total = Number(row.total);
     const successCount = Number(row.successCount);
     const totalSales = Number(row.totalSales);
+    const orgId = u?.organizationId ?? null;
     return {
       rank: idx + 1,
       userId: row.userId,
       userName: u?.name ?? "未知",
-      organizationId: u?.organizationId ?? null,
+      organizationId: orgId,
+      orgName: orgId ? (orgNameMap.get(orgId) ?? "未分配") : "未分配",
       total,
       successCount,
       totalSales,

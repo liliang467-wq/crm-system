@@ -2,6 +2,13 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -17,6 +24,7 @@ import {
   obfuscateValue,
 } from "@/lib/crm-utils";
 import { trpc } from "@/lib/trpc";
+import TeamNameDisplay from "@/components/TeamNameDisplay";
 import { ChevronLeft, ChevronRight, RotateCcw, Search } from "lucide-react";
 import { useState } from "react";
 
@@ -34,12 +42,17 @@ export default function EmployeeRanking() {
   const [dateTo, setDateTo] = useState(today.dateTo);
   const [nameSearch, setNameSearch] = useState("");
   const [nameInput, setNameInput] = useState("");
+  const [orgId, setOrgId] = useState("_all");
   const [page, setPage] = useState(1);
+
+  // Fetch formatted org list for team filter dropdown
+  const orgsFormattedQuery = trpc.mgmt.listOrganizationsFormatted.useQuery();
 
   const rankQuery = trpc.leaderboard.employeeRanking.useQuery({
     dateFrom,
     dateTo,
     nameSearch: nameSearch || undefined,
+    filterOrgId: orgId === "_all" ? undefined : parseInt(orgId),
     page,
     pageSize: 30,
   });
@@ -52,6 +65,7 @@ export default function EmployeeRanking() {
     setDateTo(today.dateTo);
     setNameSearch("");
     setNameInput("");
+    setOrgId("_all");
     setPage(1);
   }
 
@@ -88,6 +102,21 @@ export default function EmployeeRanking() {
 
           <div className="h-5 w-px bg-border" />
 
+          {/* Team filter */}
+          <Select value={orgId} onValueChange={v => { setOrgId(v); setPage(1); }}>
+            <SelectTrigger className="h-8 text-sm w-48"><SelectValue placeholder="全部团队" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_all">全部团队</SelectItem>
+              {(orgsFormattedQuery.data ?? []).map(o => (
+                <SelectItem key={o.id} value={String(o.id)}>
+                  <TeamNameDisplay name={o.displayName} />
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="h-5 w-px bg-border" />
+
           {/* Date range */}
           <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }} className="h-8 text-sm w-36" />
           <span className="text-muted-foreground text-sm">—</span>
@@ -107,6 +136,7 @@ export default function EmployeeRanking() {
                 <TableRow>
                   <TableHead className="text-xs w-16">排名</TableHead>
                   <TableHead className="text-xs">员工姓名</TableHead>
+                  <TableHead className="text-xs">团队名称</TableHead>
                   <TableHead className="text-xs">客户数</TableHead>
                   <TableHead className="text-xs">开发成功数</TableHead>
                   <TableHead className="text-xs">转化率</TableHead>
@@ -117,9 +147,9 @@ export default function EmployeeRanking() {
               </TableHeader>
               <TableBody>
                 {rankQuery.isLoading ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground text-sm">加载中...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground text-sm">加载中...</TableCell></TableRow>
                 ) : items.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground text-sm">暂无排行数据</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground text-sm">暂无排行数据</TableCell></TableRow>
                 ) : items.map(item => {
                   const isMe = item.userId === user?.id;
                   return (
@@ -129,6 +159,9 @@ export default function EmployeeRanking() {
                         {isMe ? (
                           <span className="text-primary font-semibold">{item.userName} (我)</span>
                         ) : desensitizeName(item.userName)}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <TeamNameDisplay name={item.orgName ?? "未分配"} />
                       </TableCell>
                       <TableCell className="text-sm">{item.total}</TableCell>
                       <TableCell className="text-sm">{item.successCount}</TableCell>

@@ -1,4 +1,3 @@
-import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,22 +12,29 @@ import {
   formatCurrency,
   formatPercent,
   getLast7DaysRange,
-  getTodayRange,
 } from "@/lib/crm-utils";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, ChevronRight, Medal, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 
 const PAGE_SIZE = 7;
 
-/** Generate all dates between from and to (inclusive), descending order */
+/** Format a Date to YYYY-MM-DD using LOCAL timezone (avoids UTC offset issues) */
+function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Generate all dates between from and to (inclusive), descending order (newest first) */
 function generateDateRange(from: string, to: string): string[] {
   const dates: string[] = [];
   const start = new Date(from + "T00:00:00");
   const end = new Date(to + "T00:00:00");
   const current = new Date(end);
   while (current >= start) {
-    dates.push(current.toISOString().slice(0, 10));
+    dates.push(toLocalDateStr(current));
     current.setDate(current.getDate() - 1);
   }
   return dates;
@@ -37,20 +43,16 @@ function generateDateRange(from: string, to: string): string[] {
 const ZERO_ROW = { total: 0, successCount: 0, totalSales: 0, conversionRate: 0, avgPerSuccess: 0, avgPerAll: 0 };
 
 export default function MyPerformance() {
-  const { user } = useAuth();
-  const today = getTodayRange();
   const last7 = getLast7DaysRange();
 
   const [dateFrom, setDateFrom] = useState(last7.dateFrom);
   const [dateTo, setDateTo] = useState(last7.dateTo);
   const [page, setPage] = useState(1);
 
-  const todayStatsQuery = trpc.performance.myStats.useQuery({ dateFrom: today.dateFrom, dateTo: today.dateTo });
   const statsQuery = trpc.performance.myStats.useQuery({ dateFrom, dateTo });
   // Fetch ALL daily data for the range (large pageSize to get everything, then paginate client-side)
   const listQuery = trpc.performance.myDailyList.useQuery({ dateFrom, dateTo, page: 1, pageSize: 9999 });
 
-  const todayStats = todayStatsQuery.data;
   const stats = statsQuery.data;
   const { items: rawItems = [] } = listQuery.data ?? {};
 
@@ -79,24 +81,6 @@ export default function MyPerformance() {
       <div className="h-14 border-b bg-card flex items-center px-6 shrink-0">
         <h1 className="text-lg font-semibold">我的业绩</h1>
       </div>
-
-      {user && todayStats !== undefined && (
-        <div className="bg-primary text-primary-foreground border-b border-primary/20 shadow-sm shrink-0">
-          <div className="px-6 py-2.5 flex items-center gap-5 text-sm overflow-x-auto">
-            <div className="flex items-center gap-2 font-semibold shrink-0">
-              <Medal className="h-4 w-4" />
-              <span>今日业绩</span>
-            </div>
-            <div className="h-4 w-px bg-primary-foreground/30 shrink-0" />
-            <span className="shrink-0">客户数: <strong>{todayStats?.total ?? 0}</strong></span>
-            <span className="shrink-0">成功: <strong>{todayStats?.successCount ?? 0}</strong></span>
-            <span className="shrink-0">转化率: <strong>{formatPercent(todayStats?.conversionRate)}</strong></span>
-            <span className="shrink-0">销售额: <strong>{formatCurrency(todayStats?.totalSales)}</strong></span>
-            <span className="shrink-0">成功客均: <strong>{formatCurrency(todayStats?.avgPerSuccess)}</strong></span>
-            <span className="shrink-0">全部客均: <strong>{formatCurrency(todayStats?.avgPerAll)}</strong></span>
-          </div>
-        </div>
-      )}
 
       <div className="flex-1 overflow-auto p-6 space-y-5">
         {/* Filters — date range always visible */}

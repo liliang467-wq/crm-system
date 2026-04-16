@@ -51,6 +51,7 @@ export const leaderboardRouter = router({
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
       nameSearch: z.string().optional(),
+      filterOrgId: z.number().optional(),
       page: z.number().default(1),
       pageSize: z.number().default(30),
     }))
@@ -60,11 +61,13 @@ export const leaderboardRouter = router({
       if (user.organizationId) {
         orgIds = await getVisibleOrgIds(user.organizationId);
       }
+      // If a specific org filter is provided, use only that org
+      const finalOrgIds = input.filterOrgId ? [input.filterOrgId] : orgIds;
       return getEmployeeRanking({
         dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
         dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
         nameSearch: input.nameSearch,
-        orgIds,
+        orgIds: finalOrgIds,
         page: input.page,
         pageSize: input.pageSize,
       });

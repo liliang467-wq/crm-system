@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { formatCurrency, formatPercent, getTodayRange } from "@/lib/crm-utils";
 import { trpc } from "@/lib/trpc";
+import TeamNameDisplay from "@/components/TeamNameDisplay";
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -31,6 +32,14 @@ function StatItem({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Format a Date to YYYY-MM-DD using LOCAL timezone */
+function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /** Generate all dates between from and to (inclusive), descending order */
 function generateDateRange(from: string, to: string): string[] {
   const dates: string[] = [];
@@ -38,7 +47,7 @@ function generateDateRange(from: string, to: string): string[] {
   const end = new Date(to + "T00:00:00");
   const current = new Date(end);
   while (current >= start) {
-    dates.push(current.toISOString().slice(0, 10));
+    dates.push(toLocalDateStr(current));
     current.setDate(current.getDate() - 1);
   }
   return dates;
@@ -53,14 +62,13 @@ export default function TeamPerformance() {
   const [orgId, setOrgId] = useState("_all");
   const [page, setPage] = useState(1);
 
-  // Use formatted org names for display
+  // Formatted org names for display
   const orgsFormattedQuery = trpc.mgmt.listOrganizationsFormatted.useQuery();
-  const orgsQuery = trpc.mgmt.listOrganizations.useQuery();
   const statsQuery = trpc.team.performanceStats.useQuery({
     dateFrom, dateTo,
     orgId: orgId === "_all" ? undefined : parseInt(orgId),
   });
-  // Fetch ALL daily data for the range (large pageSize), then zero-fill and paginate client-side
+  // Fetch ALL daily data for the range, then zero-fill and paginate client-side
   const listQuery = trpc.team.performanceDailyList.useQuery({
     dateFrom, dateTo,
     orgId: orgId === "_all" ? undefined : parseInt(orgId),
@@ -70,24 +78,14 @@ export default function TeamPerformance() {
   const stats = statsQuery.data;
   const { items: rawItems = [] } = listQuery.data ?? {};
 
-  // Build raw name lookup: orgId -> raw name (三级部门名 only, e.g. "业务一组")
-  const orgRawNames = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const o of orgsFormattedQuery.data ?? []) {
-      map.set(o.id, o.name); // Use raw name, not displayName with parentheses
-    }
-    return map;
-  }, [orgsFormattedQuery.data]);
-
-  // Determine which orgs are leaf-level (三级团队): orgs that have a parentId
+  // Determine leaf-level orgs (三级团队): orgs that are NOT a parent of any other org
   const leafOrgs = useMemo(() => {
     const allOrgs = orgsFormattedQuery.data ?? [];
-    // Leaf orgs = orgs that are NOT a parent of any other org
     const parentIds = new Set(allOrgs.map(o => o.parentId).filter(Boolean));
     return allOrgs.filter(o => !parentIds.has(o.id));
   }, [orgsFormattedQuery.data]);
 
-  // Build zero-filled rows: for each date, show all leaf teams (including those with no data)
+  // Build zero-filled rows: for each date, show all leaf teams + 未分配
   const filledRows = useMemo(() => {
     const allDates = generateDateRange(dateFrom, dateTo);
 
@@ -98,42 +96,21 @@ export default function TeamPerformance() {
       dataMap.set(key, row);
     }
 
-    // Check if there's unassigned data
-    const orgIdsInData = new Set(rawItems.map(r => r.orgId));
-    const hasUnassigned = orgIdsInData.has(null) || orgIdsInData.has(undefined as any);
-
-    // If filtering by a specific org, only show that org per date
-    if (orgId !== "_all") {
-      const selectedOrgId = parseInt(orgId);
-      const rawName = orgRawNames.get(selectedOrgId) ?? "未分配";
-      return allDates.map(date => {
-        const key = `${date}|${selectedOrgId}`;
-        const existing = dataMap.get(key);
-        return {
-          date,
-          orgId: selectedOrgId,
-          orgName: rawName,
-          ...(existing ? {
-            total: existing.total,
-            successCount: existing.successCount,
-            totalSales: existing.totalSales,
-            conversionRate: existing.conversionRate,
-            avgPerSuccess: existing.avgPerSuccess,
-            avgPerAll: existing.avgPerAll,
-            employeeCount: existing.employeeCount,
-            avgPerEmployee: existing.avgPerEmployee,
-          } : ZERO_ROW),
-        };
-      });
-    }
-
-    // "All teams" mode: for each date, show every leaf team + unassigned if present
+    // Build team list: all leaf orgs + always include 未分配
     type TeamEntry = { orgId: number | null; displayName: string };
-    const teams: TeamEntry[] = leafOrgs.map(o => ({
-      orgId: o.id,
-      displayName: o.name, // Use raw 三级部门名 only
-    }));
-    if (hasUnassigned) {
+    const teams: TeamEntry[] = [];
+
+    if (orgId !== "_all") {
+      // Filtering by specific org
+      const selectedOrgId = parseInt(orgId);
+      const org = leafOrgs.find(o => o.id === selectedOrgId);
+      teams.push({ orgId: selectedOrgId, displayName: org?.displayName ?? "未分配" });
+    } else {
+      // All teams mode
+      for (const org of leafOrgs) {
+        teams.push({ orgId: org.id, displayName: org.displayName });
+      }
+      // Always include 未分配
       teams.push({ orgId: null, displayName: "未分配" });
     }
 
@@ -155,11 +132,11 @@ export default function TeamPerformance() {
       for (const team of teams) {
         const key = `${date}|${team.orgId ?? "null"}`;
         const existing = dataMap.get(key);
-        if (existing) {
-          rows.push({
-            date,
-            orgId: team.orgId,
-            orgName: team.displayName, // Always use raw name
+        rows.push({
+          date,
+          orgId: team.orgId,
+          orgName: team.displayName,
+          ...(existing ? {
             total: existing.total,
             successCount: existing.successCount,
             totalSales: existing.totalSales,
@@ -168,20 +145,13 @@ export default function TeamPerformance() {
             avgPerAll: existing.avgPerAll,
             employeeCount: existing.employeeCount,
             avgPerEmployee: existing.avgPerEmployee,
-          });
-        } else {
-          rows.push({
-            date,
-            orgId: team.orgId,
-            orgName: team.displayName,
-            ...ZERO_ROW,
-          });
-        }
+          } : ZERO_ROW),
+        });
       }
     }
 
     return rows;
-  }, [rawItems, dateFrom, dateTo, orgId, leafOrgs, orgRawNames]);
+  }, [rawItems, dateFrom, dateTo, orgId, leafOrgs]);
 
   const totalRows = filledRows.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
@@ -205,10 +175,14 @@ export default function TeamPerformance() {
           <span className="text-muted-foreground text-sm">—</span>
           <Input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }} className="h-8 text-sm w-36" />
           <Select value={orgId} onValueChange={v => { setOrgId(v); setPage(1); }}>
-            <SelectTrigger className="h-8 text-sm w-36"><SelectValue placeholder="全部团队" /></SelectTrigger>
+            <SelectTrigger className="h-8 text-sm w-48"><SelectValue placeholder="全部团队" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_all">全部团队</SelectItem>
-              {orgsQuery.data?.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
+              {(orgsFormattedQuery.data ?? []).map(o => (
+                <SelectItem key={o.id} value={String(o.id)}>
+                  <TeamNameDisplay name={o.displayName} />
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Button variant="ghost" size="sm" onClick={handleReset} className="h-8 text-muted-foreground">
@@ -264,7 +238,7 @@ export default function TeamPerformance() {
                 ) : pageItems.map((row, i) => (
                   <TableRow key={`${row.date}-${row.orgId}-${i}`} className={row.total === 0 ? "text-muted-foreground" : ""}>
                     <TableCell className="text-sm font-medium">{row.date}</TableCell>
-                    <TableCell className="text-sm">{row.orgName}</TableCell>
+                    <TableCell className="text-sm"><TeamNameDisplay name={row.orgName} /></TableCell>
                     <TableCell className="text-sm">{row.total}</TableCell>
                     <TableCell className="text-sm">{row.successCount}</TableCell>
                     <TableCell className="text-sm">{formatPercent(row.conversionRate)}</TableCell>

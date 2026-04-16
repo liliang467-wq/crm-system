@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { formatCurrency, formatPercent, getTodayRange } from "@/lib/crm-utils";
 import { trpc } from "@/lib/trpc";
+import TeamNameDisplay from "@/components/TeamNameDisplay";
 import { RotateCcw } from "lucide-react";
 import { useState } from "react";
 
@@ -27,7 +28,7 @@ export default function ChannelAnalytics() {
   const [channel, setChannel] = useState("_all");
 
   const channelsQuery = trpc.mgmt.listChannels.useQuery();
-  const orgsQuery = trpc.mgmt.listOrganizations.useQuery();
+  const orgsFormattedQuery = trpc.mgmt.listOrganizationsFormatted.useQuery();
   const [orgId, setOrgId] = useState("_all");
 
   const analyticsQuery = trpc.channelAnalytics.list.useQuery({
@@ -82,13 +83,15 @@ export default function ChannelAnalytics() {
             className="h-8 text-sm w-36"
           />
           <Select value={orgId} onValueChange={setOrgId}>
-            <SelectTrigger className="h-8 text-sm w-36">
+            <SelectTrigger className="h-8 text-sm w-48">
               <SelectValue placeholder="全部团队" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="_all">全部团队</SelectItem>
-              {orgsQuery.data?.map(o => (
-                <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
+              {(orgsFormattedQuery.data ?? []).map(o => (
+                <SelectItem key={o.id} value={String(o.id)}>
+                  <TeamNameDisplay name={o.displayName} />
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>

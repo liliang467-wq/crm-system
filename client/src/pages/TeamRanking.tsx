@@ -65,7 +65,7 @@ export default function TeamRanking() {
     return allOrgs.filter(o => !parentIds.has(o.id));
   }, [orgsFormattedQuery.data]);
 
-  // Merge ranked items with all leaf teams: fill zero-data teams, add "未分配" if needed
+  // Merge ranked items with all leaf teams: fill zero-data teams, always add "未分配"
   const allTeamRows = useMemo(() => {
     // Build a map of orgId -> ranked data
     const rankedMap = new Map<number | null, typeof rankedItems[0]>();
@@ -98,7 +98,7 @@ export default function TeamRanking() {
       if (existing) {
         rows.push({
           orgId: org.id,
-          orgName: existing.orgName, // Use formatted name from backend (with parentheses)
+          orgName: org.displayName, // Use formatted name: 三级部门（二级部门）
           total: existing.total,
           successCount: existing.successCount,
           totalSales: existing.totalSales,
@@ -111,13 +111,13 @@ export default function TeamRanking() {
       } else {
         rows.push({
           orgId: org.id,
-          orgName: org.displayName, // Formatted name
+          orgName: org.displayName,
           ...ZERO_ENTRY,
         });
       }
     }
 
-    // Add "未分配" row if there's unassigned data, or always show it
+    // Always add "未分配" row
     const unassignedData = rankedMap.get(null);
     rows.push({
       orgId: null,
@@ -134,7 +134,7 @@ export default function TeamRanking() {
       } : ZERO_ENTRY),
     });
 
-    // Sort by totalSales descending, then by orgName for stability
+    // Sort by totalSales descending, then by total, then by name for stability
     rows.sort((a, b) => {
       if (b.totalSales !== a.totalSales) return b.totalSales - a.totalSales;
       if (b.total !== a.total) return b.total - a.total;

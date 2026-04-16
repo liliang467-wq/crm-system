@@ -1,5 +1,4 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -16,7 +15,7 @@ import {
   obfuscateValue,
 } from "@/lib/crm-utils";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, ChevronRight, Medal } from "lucide-react";
+import { Medal } from "lucide-react";
 import { useState } from "react";
 
 type Period = "day" | "week" | "month";
@@ -32,7 +31,6 @@ function RankBadge({ rank }: { rank: number }) {
 export default function MyRanking() {
   const { user } = useAuth();
   const [period, setPeriod] = useState<Period>("day");
-  const [page, setPage] = useState(1);
 
   // Top 30 only per PRD v1.5
   const rankQuery = trpc.leaderboard.individual.useQuery({ period, page: 1, pageSize: 30 });
@@ -40,14 +38,13 @@ export default function MyRanking() {
   const selfRankQuery = trpc.leaderboard.mySelfRank.useQuery({ period });
 
   const { items = [], total = 0 } = rankQuery.data ?? {};
-  const totalPages = Math.max(1, Math.ceil(total / 30));
   const myEntry = selfRankQuery.data;
 
   return (
     <div className="flex flex-col h-screen">
       <div className="h-14 border-b bg-card flex items-center justify-between px-6 shrink-0">
         <h1 className="text-lg font-semibold">我的排行</h1>
-        <Tabs value={period} onValueChange={v => { setPeriod(v as Period); setPage(1); }}>
+        <Tabs value={period} onValueChange={v => { setPeriod(v as Period); }}>
           <TabsList className="h-8">
             {Object.entries(PERIOD_LABELS).map(([k, v]) => (
               <TabsTrigger key={k} value={k} className="text-xs px-3">{v}</TabsTrigger>
@@ -56,7 +53,27 @@ export default function MyRanking() {
         </Tabs>
       </div>
 
-      <div className="flex-1 overflow-auto p-6 pb-20">
+      <div className="flex-1 overflow-auto p-6 space-y-5">
+        {/* My Rank Summary — moved to top */}
+        {user && myEntry && (
+          <div className="bg-primary text-primary-foreground rounded-lg shadow-md">
+            <div className="px-6 py-4 flex items-center gap-5 text-sm overflow-x-auto">
+              <div className="flex items-center gap-2 font-semibold shrink-0">
+                <Medal className="h-5 w-5" />
+                <span className="text-base">我的排名: #{myEntry.rank}</span>
+              </div>
+              <div className="h-5 w-px bg-primary-foreground/30 shrink-0" />
+              <span className="shrink-0">客户数: {myEntry.total}</span>
+              <span className="shrink-0">成功: {myEntry.successCount}</span>
+              <span className="shrink-0">转化率: {formatPercent(myEntry.conversionRate)}</span>
+              <span className="shrink-0">销售额: {formatCurrency(myEntry.totalSales)}</span>
+              <span className="shrink-0">成功客均: {formatCurrency(myEntry.avgPerSuccess)}</span>
+              <span className="shrink-0">全部客均: {formatCurrency(myEntry.avgPerAll)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Ranking Table */}
         <div className="bg-card rounded-lg border">
           <div className="overflow-auto">
             <Table>
@@ -111,25 +128,6 @@ export default function MyRanking() {
           </div>
         </div>
       </div>
-
-      {/* Floating own row — always shows real data, independent of pagination */}
-      {user && myEntry && (
-        <div className="fixed bottom-0 left-[var(--sidebar-width,220px)] right-0 bg-primary text-primary-foreground border-t border-primary/20 shadow-lg z-20">
-          <div className="px-6 py-3 flex items-center gap-5 text-sm overflow-x-auto">
-            <div className="flex items-center gap-2 font-semibold shrink-0">
-              <Medal className="h-4 w-4" />
-              <span>我的排名: #{myEntry.rank}</span>
-            </div>
-            <div className="h-4 w-px bg-primary-foreground/30 shrink-0" />
-            <span className="shrink-0">客户数: {myEntry.total}</span>
-            <span className="shrink-0">成功: {myEntry.successCount}</span>
-            <span className="shrink-0">转化率: {formatPercent(myEntry.conversionRate)}</span>
-            <span className="shrink-0">销售额: {formatCurrency(myEntry.totalSales)}</span>
-            <span className="shrink-0">成功客均: {formatCurrency(myEntry.avgPerSuccess)}</span>
-            <span className="shrink-0">全部客均: {formatCurrency(myEntry.avgPerAll)}</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
